@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Splits &amp; Sugar — Sample Report</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏃</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Splits &amp; Sugar</p>
+  <h1>This is what<br><span class="grad">a report looks like.</span></h1>
+  <p class="sub">A live sample built from a demo run and synthetic glucose data — everything below is generated the same way your real report would be. <a href="./">Make your own &rarr;</a></p>
+
+  <div class="report" id="report"></div>
+
+  <p class="disclaimer">Not a medical tool — just a fun way to see two data sets on one page. Glucose readings are read locally in your browser and never uploaded anywhere.</p>
+  <footer>Built with <span class="heart">&lt;3</span> by AT</footer>
+</div>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => generateDemoReport());
+</script>
+</body>
+</html>
