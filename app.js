@@ -439,6 +439,7 @@ function buildReport(a){
     a.total_elevation_gain > 0 ? {label:'Elev gain', val: Math.round(a.total_elevation_gain*3.281), unit:' ft', color:'var(--strava-ink)'} : null,
     a.average_heartrate ? {label:'Avg HR', val: Math.round(a.average_heartrate), unit:' bpm', color:'var(--strava-ink)'} : null,
     {label:'Avg glucose', val: fmtG(g.avg), unit:' '+glucoseUnit, color:'var(--glucose-ink)'},
+    {label:'Range', val: fmtG(g.minRow.val)+'–'+fmtG(g.maxRow.val), unit:' '+glucoseUnit, sub:'low–high during run', color:'var(--glucose-ink)'},
     {label:'In range', val: g.tir, unit:' %', sub:'target '+fmtG(g.lo)+'–'+fmtG(g.hi), color:'var(--glucose-ink)'},
     {label:'Start → finish', val: deltaSign + fmtG(g.delta), unit:' '+glucoseUnit, sub: fmtG(g.startVal)+' → '+fmtG(g.endVal), color:'var(--glucose-ink)'}
   ].filter(Boolean);
@@ -637,47 +638,56 @@ function renderShareCanvas(){
     y += 6;
   }
 
-  // stats: two rows of three
-  const stats = [
-    ['DISTANCE', distMi.toFixed(2), ' mi', '#ff5a2e'],
-    ['AVG PACE', pace.replace('/mi',''), ' /mi', '#ff5a2e'],
-    ['TIME', fmtDur(a.moving_time || a.elapsed_time), '', '#ff5a2e'],
-    ['AVG GLUCOSE', fmtG(g.avg), ' ' + glucoseUnit, '#45e0c4'],
-    ['IN RANGE', String(g.tir), ' %', '#45e0c4'],
-    ['START → FINISH', (g.delta > 0 ? '+' : '') + fmtG(g.delta), ' ' + glucoseUnit, '#45e0c4']
+  // stats: an orange run row (3 cells) and a teal glucose row (4 cells);
+  // the glucose unit lives in the chart header, so the teal values stay bare
+  const rowDefs = [
+    {color:'#ff5a2e', valPx: 54, cols: [
+      ['DISTANCE', distMi.toFixed(2), ' mi'],
+      ['AVG PACE', pace.replace('/mi',''), ' /mi'],
+      ['TIME', fmtDur(a.moving_time || a.elapsed_time), '']
+    ]},
+    {color:'#45e0c4', valPx: 46, cols: [
+      ['AVG GLUCOSE', fmtG(g.avg), ''],
+      ['RANGE', fmtG(g.minRow.val) + '–' + fmtG(g.maxRow.val), ''],
+      ['IN RANGE', null, ''], // rendered as the ring gauge
+      ['START → FINISH', (g.delta > 0 ? '+' : '') + fmtG(g.delta), '']
+    ]}
   ];
-  const colW = (W - 2*P) / 3, rowH = 148;
-  stats.forEach(([label, val, unit, color], i) => {
-    const sx = P + (i % 3) * colW, sy = y + Math.floor(i / 3) * rowH;
-    x.fillStyle = color; x.fillRect(sx, sy - 16, 16, 16);
-    x.fillStyle = '#6b7686';
-    x.font = '500 21px "JetBrains Mono", monospace';
-    x.fillText(label, sx + 26, sy);
-    if(label === 'IN RANGE'){
-      // ring gauge instead of a plain number
-      const rcx = sx + 56, rcy = sy + 62, rr = 44;
-      x.strokeStyle = 'rgba(29,168,143,.22)'; x.lineWidth = 11;
-      x.beginPath(); x.arc(rcx, rcy, rr, 0, Math.PI*2); x.stroke();
-      x.strokeStyle = '#45e0c4'; x.lineCap = 'round';
-      x.shadowColor = 'rgba(69,224,196,.6)'; x.shadowBlur = 12;
-      x.beginPath(); x.arc(rcx, rcy, rr, -Math.PI/2, -Math.PI/2 + Math.PI*2*(g.tir/100));
-      x.stroke();
-      x.shadowBlur = 0;
+  const rowH = 148;
+  rowDefs.forEach((row, ri) => {
+    const colW = (W - 2*P) / row.cols.length;
+    row.cols.forEach(([label, val, unit], ci) => {
+      const sx = P + ci * colW, sy = y + ri * rowH;
+      x.fillStyle = row.color; x.fillRect(sx, sy - 16, 16, 16);
+      x.fillStyle = '#6b7686';
+      x.font = '500 21px "JetBrains Mono", monospace';
+      x.fillText(label, sx + 26, sy);
+      if(val === null){
+        // in-range ring gauge
+        const rcx = sx + 52, rcy = sy + 60, rr = 40;
+        x.strokeStyle = 'rgba(29,168,143,.22)'; x.lineWidth = 10;
+        x.beginPath(); x.arc(rcx, rcy, rr, 0, Math.PI*2); x.stroke();
+        x.strokeStyle = '#45e0c4'; x.lineCap = 'round';
+        x.shadowColor = 'rgba(69,224,196,.6)'; x.shadowBlur = 12;
+        x.beginPath(); x.arc(rcx, rcy, rr, -Math.PI/2, -Math.PI/2 + Math.PI*2*(g.tir/100));
+        x.stroke();
+        x.shadowBlur = 0;
+        x.fillStyle = '#f2f0ea';
+        x.font = '700 26px Inter, sans-serif';
+        const pt = g.tir + '%';
+        x.fillText(pt, rcx - x.measureText(pt).width/2, rcy + 9);
+        return;
+      }
       x.fillStyle = '#f2f0ea';
-      x.font = '700 28px Inter, sans-serif';
-      const pt = g.tir + '%';
-      x.fillText(pt, rcx - x.measureText(pt).width/2, rcy + 10);
-      return;
-    }
-    x.fillStyle = '#f2f0ea';
-    x.font = '700 54px Inter, sans-serif';
-    x.fillText(val, sx, sy + 62);
-    const vw = x.measureText(val).width;
-    if(unit){
-      x.fillStyle = '#9aa4b4';
-      x.font = '500 26px Inter, sans-serif';
-      x.fillText(unit, sx + vw + 6, sy + 62);
-    }
+      x.font = '700 ' + row.valPx + 'px Inter, sans-serif';
+      x.fillText(val, sx, sy + 62);
+      const vw = x.measureText(val).width;
+      if(unit){
+        x.fillStyle = '#9aa4b4';
+        x.font = '500 26px Inter, sans-serif';
+        x.fillText(unit, sx + vw + 6, sy + 62);
+      }
+    });
   });
   y += 2 * rowH + 30;
 
