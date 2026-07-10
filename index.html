@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Splits &amp; Sugar</title>
+<meta name="description" content="Combine a Strava run with Dexcom glucose data into one beautiful, shareable report.">
+<meta property="og:title" content="Splits &amp; Sugar">
+<meta property="og:description" content="One run, one story — pace and glucose on a single page.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏃</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -12,68 +16,84 @@
     --bg-panel: #161c26;
     --bg-raise: #1d2430;
     --line: #2a3341;
+    --grid: #222a37;
     --text: #f2f0ea;
     --text-dim: #9aa4b4;
-    --strava: #ff5a2e;
-    --glucose: #45e0c4;
+    --text-mute: #6b7686;
+    --strava: #ff5a2e;          /* UI accent */
+    --glucose: #45e0c4;         /* UI accent */
+    --strava-ink: #d94518;      /* chart data ink (validated on dark surface) */
+    --glucose-ink: #1da88f;     /* chart data ink (validated on dark surface) */
     --glucose-dim: #2c8f7f;
     --warn: #ffb84d;
     --radius: 14px;
   }
   *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
   body{
     margin:0;
-    background:var(--bg);
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(69,224,196,.07), transparent 60%),
+      radial-gradient(800px 480px at 95% 4%, rgba(255,90,46,.06), transparent 55%),
+      var(--bg);
     color:var(--text);
     font-family:'Inter',sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px;}
+  .wrap{max-width:780px;margin:0 auto;padding:44px 20px 40px;}
   .eyebrow{
     font-family:'JetBrains Mono',monospace;
     font-size:11px;
-    letter-spacing:.12em;
+    letter-spacing:.18em;
     text-transform:uppercase;
     color:var(--glucose);
-    margin:0 0 6px;
+    margin:0 0 10px;
   }
   h1{
     font-family:'Oswald',sans-serif;
     font-weight:700;
-    font-size:38px;
-    line-height:1.05;
-    margin:0 0 8px;
+    font-size:44px;
+    line-height:1.04;
+    margin:0 0 12px;
     letter-spacing:.01em;
   }
-  .sub{color:var(--text-dim);font-size:15px;line-height:1.5;margin:0 0 28px;max-width:520px;}
+  h1 .grad{
+    background:linear-gradient(92deg, var(--glucose) 10%, var(--strava) 90%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .sub{color:var(--text-dim);font-size:15.5px;line-height:1.55;margin:0 0 34px;max-width:540px;}
   .card{
-    background:var(--bg-panel);
+    background:linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,0)), var(--bg-panel);
     border:1px solid var(--line);
     border-radius:var(--radius);
     padding:22px 22px 24px;
     margin-bottom:18px;
+    transition:border-color .25s ease;
   }
-  .card.done{border-color:var(--glucose-dim);}
+  .card.done{border-color:var(--glucose-dim);box-shadow:0 0 0 1px rgba(69,224,196,.08), 0 8px 28px -18px rgba(69,224,196,.25);}
   .step-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
   .step-num{
     font-family:'JetBrains Mono',monospace;
     font-size:12px;
-    width:22px;height:22px;
+    width:24px;height:24px;
     border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     background:var(--bg-raise);
     color:var(--text-dim);
     border:1px solid var(--line);
     flex-shrink:0;
+    transition:all .25s ease;
   }
   .step-num.active{background:var(--strava);color:#10141b;border-color:var(--strava);}
   .step-num.complete{background:var(--glucose);color:#10141b;border-color:var(--glucose);}
-  .step-title{font-family:'Oswald',sans-serif;font-size:17px;font-weight:600;letter-spacing:.01em;}
+  .step-title{font-family:'Oswald',sans-serif;font-size:17px;font-weight:600;letter-spacing:.02em;}
   .step-body{color:var(--text-dim);font-size:14px;line-height:1.6;}
-  details{margin:10px 0 14px;}
-  summary{cursor:pointer;color:var(--glucose);font-size:13px;font-weight:500;}
-  details ol{margin:10px 0 0;padding-left:20px;color:var(--text-dim);font-size:13.5px;line-height:1.7;}
-  details a{color:var(--glucose);}
+  details.help{margin:10px 0 14px;}
+  details.help summary{cursor:pointer;color:var(--glucose);font-size:13px;font-weight:500;}
+  details.help ol{margin:10px 0 0;padding-left:20px;color:var(--text-dim);font-size:13.5px;line-height:1.7;}
+  details.help a{color:var(--glucose);}
   input[type="text"], input[type="password"]{
     width:100%;
     background:var(--bg-raise);
@@ -94,13 +114,16 @@
     border-radius:9px;
     padding:11px 18px;
     cursor:pointer;
-    transition:transform .08s ease, opacity .15s ease;
+    transition:transform .08s ease, opacity .15s ease, box-shadow .2s ease;
   }
   button:active{transform:scale(0.97);}
   button:disabled{opacity:.4;cursor:not-allowed;}
   .btn-strava{background:var(--strava);color:#fff;}
+  .btn-strava:hover:not(:disabled){box-shadow:0 4px 18px -6px rgba(255,90,46,.55);}
   .btn-glucose{background:var(--glucose);color:#0d1512;}
+  .btn-glucose:hover:not(:disabled){box-shadow:0 4px 18px -6px rgba(69,224,196,.55);}
   .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--line);}
+  .btn-ghost:hover{color:var(--text);border-color:var(--text-mute);}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   .activity-list{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
   .activity{
@@ -110,8 +133,9 @@
     padding:12px 14px;
     cursor:pointer;
     display:flex;justify-content:space-between;align-items:center;gap:12px;
+    transition:border-color .15s ease, transform .15s ease;
   }
-  .activity:hover{border-color:var(--strava);}
+  .activity:hover{border-color:var(--strava);transform:translateX(2px);}
   .activity.selected{border-color:var(--strava);background:#241a15;}
   .act-name{font-weight:600;font-size:14px;}
   .act-meta{color:var(--text-dim);font-size:12px;font-family:'JetBrains Mono',monospace;}
@@ -124,34 +148,108 @@
     font-size:13.5px;
     margin-top:10px;
     cursor:pointer;
+    display:block;
+    transition:border-color .15s ease, color .15s ease;
   }
   .file-drop:hover{border-color:var(--glucose);color:var(--text);}
   .file-drop input{display:none;}
   .error{color:var(--warn);font-size:13px;margin-top:8px;}
   .ok{color:var(--glucose);font-size:13px;margin-top:8px;}
 
-  /* Report */
-  .report{margin-top:26px;}
+  /* ---------- Report ---------- */
+  .report{margin-top:30px;}
   .report-hero{
-    background:linear-gradient(160deg, #171c25 0%, #10141b 100%);
+    background:linear-gradient(160deg, #171d27 0%, #10141b 78%);
     border:1px solid var(--line);
     border-radius:18px;
-    padding:26px 22px 20px;
+    padding:28px 24px 24px;
+    position:relative;
+    overflow:hidden;
   }
-  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:6px;}
-  .hero-name{font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;}
-  .hero-date{color:var(--text-dim);font-size:12.5px;font-family:'JetBrains Mono',monospace;}
-  .legend{display:flex;gap:16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);margin:2px 0 14px;}
-  .legend span{display:flex;align-items:center;gap:6px;}
-  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
-  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:20px;}
-  .stat{background:var(--bg-raise);border:1px solid var(--line);border-radius:11px;padding:14px 14px;}
-  .stat-label{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-family:'JetBrains Mono',monospace;}
-  .stat-val{font-family:'Oswald',sans-serif;font-size:24px;font-weight:600;margin-top:4px;}
-  .stat-val.glucose{color:var(--glucose);}
-  .stat-val.strava{color:var(--strava);}
+  .report-hero::before{
+    content:'';
+    position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg, var(--glucose), var(--strava));
+    opacity:.85;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .reveal{animation:rise .5s ease both;}
+    @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  }
+  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:4px;}
+  .hero-name{font-family:'Oswald',sans-serif;font-size:24px;font-weight:600;letter-spacing:.01em;}
+  .hero-date{color:var(--text-dim);font-size:12.5px;font-family:'JetBrains Mono',monospace;text-align:right;line-height:1.7;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:18px;}
+  .stat{background:var(--bg-raise);border:1px solid var(--line);border-radius:11px;padding:13px 14px;}
+  .stat-label{color:var(--text-mute);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;}
+  .stat-val{font-size:23px;font-weight:600;margin-top:5px;letter-spacing:-.01em;}
+  .stat-val small{font-size:12px;font-weight:500;color:var(--text-dim);margin-left:2px;}
+  .stat-sub{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+  .stat-mark{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;}
+
+  .section-title{
+    font-family:'Oswald',sans-serif;font-size:15px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--text-dim);margin:26px 0 10px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-title::after{content:'';flex:1;height:1px;background:var(--line);}
+
+  /* Glucose chart */
+  .chart-wrap{position:relative;margin-top:6px;outline:none;border-radius:10px;}
+  .chart-wrap:focus-visible{box-shadow:0 0 0 2px var(--glucose-dim);}
+  .chart-wrap svg{width:100%;height:auto;display:block;}
+  .chart-key{
+    display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;
+    font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);
+  }
+  .chart-key span{display:flex;align-items:center;gap:6px;}
+  .key-line{width:16px;height:2px;background:var(--glucose-ink);border-radius:1px;}
+  .key-band{width:14px;height:10px;background:rgba(217,69,24,.14);border:1px solid rgba(217,69,24,.5);border-radius:2px;}
+  .key-target{width:16px;height:0;border-top:1.5px dashed var(--text-mute);}
+  .tooltip{
+    position:absolute;pointer-events:none;z-index:5;
+    background:#0c1016;border:1px solid var(--line);border-radius:8px;
+    padding:8px 11px;min-width:110px;
+    box-shadow:0 8px 22px -8px rgba(0,0,0,.7);
+    display:none;
+  }
+  .tooltip .tt-val{font-size:17px;font-weight:600;color:var(--text);}
+  .tooltip .tt-val small{font-size:11px;color:var(--text-dim);font-weight:500;}
+  .tooltip .tt-time{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);margin-top:2px;}
+  .tooltip .tt-phase{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mute);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+
+  /* Splits */
+  .splits{margin-top:4px;display:flex;flex-direction:column;gap:6px;}
+  .split-row{display:grid;grid-template-columns:44px 1fr 96px;align-items:center;gap:10px;}
+  .split-mi{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-mute);text-align:right;}
+  .split-track{height:18px;position:relative;}
+  .split-bar{
+    height:100%;border-radius:0 4px 4px 0;
+    background:rgba(217,69,24,.42);
+    min-width:3px;
+    transition:opacity .15s ease;
+  }
+  .split-row.fastest .split-bar{background:var(--strava-ink);}
+  .split-row:hover .split-bar{opacity:.8;}
+  .split-pace{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);white-space:nowrap;}
+  .split-row.fastest .split-pace{color:var(--text);font-weight:600;}
+  .split-tag{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--strava);margin-left:6px;font-family:'JetBrains Mono',monospace;}
+
+  /* Story */
+  .story{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .story-block{
+    background:var(--bg-raise);border:1px solid var(--line);border-radius:11px;
+    padding:13px 16px;display:flex;gap:13px;align-items:flex-start;
+  }
+  .story-when{
+    font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--glucose);white-space:nowrap;padding-top:3px;min-width:56px;
+  }
+  .story-text{font-size:14px;line-height:1.6;color:var(--text);}
+
   .blurb{
-    margin-top:20px;
+    margin-top:18px;
     font-size:15px;
     line-height:1.6;
     color:var(--text);
@@ -161,7 +259,7 @@
     border-radius:0 10px 10px 0;
   }
   .caption-box{
-    margin-top:16px;
+    margin-top:14px;
     background:var(--bg-raise);
     border:1px solid var(--line);
     border-radius:10px;
@@ -174,16 +272,42 @@
   }
   .caption-text{font-style:italic;color:var(--text);}
   .copy-btn{background:var(--bg-panel);color:var(--glucose);border:1px solid var(--glucose-dim);font-size:12px;padding:7px 12px;flex-shrink:0;}
-  .disclaimer{margin-top:24px;color:var(--text-dim);font-size:11.5px;line-height:1.6;text-align:center;}
-  @media (max-width:480px){h1{font-size:30px;} .report-hero{padding:20px 16px 16px;}}
+
+  /* Table view */
+  details.tableview{margin-top:16px;}
+  details.tableview summary{cursor:pointer;color:var(--text-dim);font-size:12.5px;font-family:'JetBrains Mono',monospace;}
+  details.tableview summary:hover{color:var(--text);}
+  .tbl-scroll{overflow-x:auto;margin-top:10px;}
+  table.data{border-collapse:collapse;font-size:12.5px;width:100%;}
+  table.data caption{text-align:left;font-size:11px;color:var(--text-mute);padding:8px 0 4px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
+  table.data th{color:var(--text-mute);font-weight:500;text-align:left;padding:5px 14px 5px 0;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.05em;}
+  table.data td{padding:4px 14px 4px 0;border-bottom:1px solid var(--grid);color:var(--text-dim);font-variant-numeric:tabular-nums;font-family:'JetBrains Mono',monospace;font-size:12px;}
+
+  .disclaimer{margin-top:28px;color:var(--text-mute);font-size:11.5px;line-height:1.6;text-align:center;}
+  footer{
+    margin-top:14px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-mute);
+    padding-bottom:28px;
+  }
+  footer .heart{color:var(--strava);display:inline-block;}
+  @media (prefers-reduced-motion: no-preference){
+    footer .heart{animation:beat 2.2s ease-in-out infinite;}
+    @keyframes beat{0%,100%{transform:scale(1);}12%{transform:scale(1.2);}24%{transform:scale(1);}}
+  }
+  @media (max-width:520px){
+    h1{font-size:33px;}
+    .report-hero{padding:20px 16px 18px;}
+    .hero-date{text-align:left;}
+    .split-row{grid-template-columns:36px 1fr 88px;}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <p class="eyebrow">Splits &amp; Sugar</p>
-  <h1>Turn one run into<br>one story.</h1>
-  <p class="sub">Pull a run straight from Strava, drop in a Dexcom Clarity export, and get a single fun report showing how her glucose moved while she ran.</p>
+  <h1>Turn one run into<br><span class="grad">one story.</span></h1>
+  <p class="sub">Pull a run straight from Strava, drop in a Dexcom Clarity export, and get a single beautiful report showing how her glucose moved before, during, and after the run.</p>
 
   <!-- STEP 1 -->
   <div class="card" id="card-strava">
@@ -192,16 +316,16 @@
       <div class="step-title">Connect Strava</div>
     </div>
     <div class="step-body">
-      <details>
+      <details class="help">
         <summary>How to get a Strava access token (one-time, ~2 min)</summary>
         <ol>
-          <li>Go to <a href="https://www.strava.com/settings/api" target="_blank">strava.com/settings/api</a> (log in as the runner).</li>
+          <li>Go to <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> (log in as the runner).</li>
           <li>Fill in any app name and website (e.g. "My Run Reports" / "https://example.com") and create the app.</li>
           <li>On the page that appears, copy the value next to <b>"Your Access Token"</b>.</li>
-          <li>Paste it below. It only lets this page read her own activities.</li>
+          <li>Paste it below. It only lets this page read her own activities, and tokens expire after ~6 hours — grab a fresh one next time.</li>
         </ol>
       </details>
-      <input type="password" id="strava-token" placeholder="Paste Strava access token here">
+      <input type="password" id="strava-token" placeholder="Paste Strava access token here" autocomplete="off">
       <div class="row" style="margin-top:8px;">
         <button class="btn-strava" id="btn-connect-strava">Connect &amp; load recent runs</button>
       </div>
@@ -217,7 +341,7 @@
       <div class="step-title">Add her glucose data</div>
     </div>
     <div class="step-body">
-      <details>
+      <details class="help">
         <summary>How to export from Dexcom Clarity (~30 sec)</summary>
         <ol>
           <li>Open the <b>Dexcom Clarity</b> app or clarity.dexcom.com.</li>
@@ -253,6 +377,7 @@
   <div class="report" id="report"></div>
 
   <p class="disclaimer">Not a medical tool — just a fun way to see two data sets on one page. Glucose readings are read locally in your browser and never uploaded anywhere.</p>
+  <footer>Built with <span class="heart">&lt;3</span> by AT</footer>
 </div>
 
 <script>
@@ -263,11 +388,45 @@ let glucoseRows = null; // [{t: Date, val: number}]
 let glucoseUnit = 'mg/dL';
 
 const $ = (id) => document.getElementById(id);
+const MI = 1609.34;
+const PAD_MS = 45 * 60 * 1000; // report window: 45 min either side of the run
+
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Strava's start_date_local carries a "Z" suffix but is local wall time, not
+// UTC. Strip any zone marker so it parses in the browser's local time and
+// lines up with the Dexcom CSV timestamps (also local wall time).
+function parseLocalDate(s){
+  return new Date(String(s).replace(/(Z|[+-]\d\d:?\d\d)$/, ''));
+}
+function toLocalISO(d){
+  const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
 
 function setStep(n, state){ // state: 'active' | 'complete'
   const el = $('num-'+n);
   el.classList.remove('active','complete');
   el.classList.add(state);
+}
+
+// ---------- formatting ----------
+function fmtPace(mps){
+  if(!mps || mps <= 0) return '—';
+  const secPerMile = MI / mps;
+  const m = Math.floor(secPerMile/60), s = Math.round(secPerMile%60);
+  return m + ':' + String(s).padStart(2,'0') + '/mi';
+}
+function fmtDur(sec){
+  sec = Math.round(sec);
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(s).padStart(2,'0');
+}
+function fmtClock(d){
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+function fmtG(v){
+  return glucoseUnit === 'mmol/L' ? (Math.round(v*10)/10).toFixed(1) : String(Math.round(v));
 }
 
 // ---------- STEP 1: Strava ----------
@@ -282,11 +441,13 @@ $('btn-connect-strava').addEventListener('click', async () => {
   $('btn-connect-strava').disabled = true;
   $('btn-connect-strava').textContent = 'Loading…';
   try{
-    const res = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=15', {
+    const res = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=20', {
       headers: { 'Authorization': 'Bearer ' + token }
     });
     if(!res.ok){
-      throw new Error(res.status === 401 ? 'Token rejected — double check it was copied fully.' : 'Strava returned an error (' + res.status + ').');
+      throw new Error(res.status === 401
+        ? 'Token rejected — check it was copied fully. Strava tokens also expire after ~6 hours, so you may need a fresh one from strava.com/settings/api.'
+        : 'Strava returned an error (' + res.status + ').');
     }
     const data = await res.json();
     activities = data.filter(a => a.type === 'Run' || a.type === 'TrailRun');
@@ -300,30 +461,23 @@ $('btn-connect-strava').addEventListener('click', async () => {
     $('card-strava').classList.add('done');
     setStep(1,'complete');
   }catch(err){
-    statusEl.innerHTML = '<div class="error">' + err.message + '</div>';
+    statusEl.innerHTML = '<div class="error">' + esc(err.message) + '</div>';
   }finally{
     $('btn-connect-strava').disabled = false;
     $('btn-connect-strava').textContent = 'Connect & load recent runs';
   }
 });
 
-function fmtPace(mps, distM){
-  if(!mps || mps === 0) return '—';
-  const secPerMile = 1609.34 / mps;
-  const m = Math.floor(secPerMile/60), s = Math.round(secPerMile%60);
-  return m + ':' + String(s).padStart(2,'0') + '/mi';
-}
-
 function renderActivityList(){
   const list = $('activity-list');
   list.innerHTML = '';
-  activities.forEach((a, i) => {
+  activities.forEach((a) => {
     const div = document.createElement('div');
     div.className = 'activity';
-    const dist = (a.distance/1609.34).toFixed(2);
-    const date = new Date(a.start_date_local).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+    const dist = (a.distance/MI).toFixed(2);
+    const date = parseLocalDate(a.start_date_local).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
     div.innerHTML = `<div>
-        <div class="act-name">${a.name}</div>
+        <div class="act-name">${esc(a.name)}</div>
         <div class="act-meta">${date} · ${dist} mi · ${fmtPace(a.average_speed)}</div>
       </div>`;
     div.addEventListener('click', () => {
@@ -357,7 +511,7 @@ $('csv-input').addEventListener('change', (e) => {
       setStep(2,'complete');
       checkReady();
     }catch(err){
-      $('glucose-status').innerHTML = '<div class="error">Couldn\'t read that CSV: ' + err.message + '</div>';
+      $('glucose-status').innerHTML = '<div class="error">Couldn\'t read that CSV: ' + esc(err.message) + '</div>';
     }
   };
   reader.readAsText(file);
@@ -403,41 +557,53 @@ function splitCsvLine(line){
 
 function checkReady(){
   $('btn-generate').disabled = !(selectedActivity && glucoseRows);
-  setStep(3, (selectedActivity && glucoseRows) ? 'active' : 'active');
 }
 
 // ---------- DEMO DATA ----------
 $('btn-demo').addEventListener('click', () => {
   const now = new Date();
-  const start = new Date(now.getTime() - 50*60*1000); // started 50 min ago
+  const start = new Date(now.getTime() - 110*60*1000);
   const distanceM = 8046; // ~5 mi
-  const elapsedSec = 45*60; // 45 min
+  const elapsedSec = 45*60;
 
+  const paces = [1609/(9.2*60), 1609/(8.9*60), 1609/(9.5*60), 1609/(8.6*60), 1609/(9.0*60)];
   selectedActivity = {
+    _demo: true,
     name: 'Sunset Loop (demo)',
     type: 'Run',
-    start_date_local: start.toISOString(),
+    start_date_local: toLocalISO(start),
     elapsed_time: elapsedSec,
+    moving_time: elapsedSec - 90,
     distance: distanceM,
-    average_speed: distanceM / elapsedSec
+    average_speed: distanceM / elapsedSec,
+    total_elevation_gain: 14,
+    average_heartrate: 158,
+    calories: 420,
+    splits_standard: paces.map((sp, i) => ({
+      split: i+1,
+      distance: i < 4 ? MI : distanceM - 4*MI,
+      moving_time: (i < 4 ? MI : distanceM - 4*MI) / sp,
+      average_speed: sp,
+      elevation_difference: [1.2, -1.8, 3.7, -2.4, 0.6][i],
+      average_heartrate: [148, 154, 161, 165, 159][i]
+    }))
   };
 
   // synthetic glucose curve: gentle pre-run rise, dip mid-run, recovery after
   const rows = [];
-  const rangeStart = new Date(start.getTime() - 30*60*1000);
-  const rangeEnd = new Date(start.getTime() + elapsedSec*1000 + 30*60*1000);
+  const rangeStart = new Date(start.getTime() - 50*60*1000);
+  const rangeEnd = new Date(start.getTime() + elapsedSec*1000 + 50*60*1000);
   let t = new Date(rangeStart);
-  let base = 105;
   while(t <= rangeEnd){
     const minutesIn = (t - start)/60000;
-    let val = base;
+    let val;
     if(minutesIn < 0){
-      val = 100 + (minutesIn+30)*0.3; // slow pre-run climb
+      val = 100 + (minutesIn+50)*0.28; // slow pre-run climb
     } else if(minutesIn <= elapsedSec/60){
-      val = 112 - minutesIn*0.6 + Math.sin(minutesIn/6)*4; // gentle decline during run w/ wobble
+      val = 114 - minutesIn*0.75 + Math.sin(minutesIn/6)*4; // decline during run w/ wobble
     } else {
       const afterMin = minutesIn - elapsedSec/60;
-      val = 85 + afterMin*0.5; // recovery after
+      val = 80 + afterMin*0.55; // recovery after
     }
     val += (Math.random()-0.5)*3;
     rows.push({t: new Date(t), val: Math.round(val)});
@@ -454,71 +620,141 @@ $('btn-demo').addEventListener('click', () => {
   checkReady();
 });
 
-
-$('btn-generate').addEventListener('click', () => {
-  buildReport();
+// ---------- GENERATE ----------
+$('btn-generate').addEventListener('click', async () => {
+  const btn = $('btn-generate');
+  btn.disabled = true;
+  btn.textContent = 'Building…';
+  const detail = await fetchActivityDetail();
+  buildReport(detail ? {...selectedActivity, ...detail} : selectedActivity);
+  btn.disabled = false;
+  btn.textContent = 'Generate report';
   $('report').scrollIntoView({behavior:'smooth', block:'start'});
 });
 
-function buildReport(){
-  const a = selectedActivity;
-  const start = new Date(a.start_date_local);
-  const end = new Date(start.getTime() + (a.elapsed_time*1000));
-  const padMs = 10*60*1000;
-  const windowRows = glucoseRows.filter(r => r.t >= new Date(start-padMs) && r.t <= new Date(end.getTime()+padMs));
+// Detailed activity adds mile splits, calories, heart rate. Same read scope as
+// the activity list; if it fails for any reason the report renders without them.
+async function fetchActivityDetail(){
+  if(selectedActivity._demo) return null;
+  if(!stravaToken || !selectedActivity.id) return null;
+  try{
+    const res = await fetch('https://www.strava.com/api/v3/activities/' + selectedActivity.id, {
+      headers: { 'Authorization': 'Bearer ' + stravaToken }
+    });
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(_){
+    return null;
+  }
+}
 
-  if(windowRows.length === 0){
+// ---------- glucose analysis ----------
+function targetRange(){
+  return glucoseUnit === 'mmol/L' ? [3.9, 10.0] : [70, 180];
+}
+
+function analyzeGlucose(rows, start, end){
+  const [lo, hi] = targetRange();
+  const win = rows.filter(r => r.t >= new Date(start.getTime()-PAD_MS) && r.t <= new Date(end.getTime()+PAD_MS));
+  if(win.length === 0) return null;
+  const pre = win.filter(r => r.t < start);
+  const during = win.filter(r => r.t >= start && r.t <= end);
+  const post = win.filter(r => r.t > end);
+  const core = during.length ? during : win;
+  const vals = core.map(r => r.val);
+  const avg = vals.reduce((s,v)=>s+v,0)/vals.length;
+  let minRow = core[0], maxRow = core[0];
+  core.forEach(r => { if(r.val < minRow.val) minRow = r; if(r.val > maxRow.val) maxRow = r; });
+  const inRange = vals.filter(v => v >= lo && v <= hi).length;
+  return {
+    win, pre, during, post, lo, hi,
+    avg, minRow, maxRow,
+    startVal: core[0].val,
+    endVal: core[core.length-1].val,
+    delta: core[core.length-1].val - core[0].val,
+    tir: Math.round(100 * inRange / vals.length),
+    swing: maxRow.val - minRow.val,
+    minAtMin: Math.round((minRow.t - start)/60000)
+  };
+}
+
+// ---------- REPORT ----------
+function buildReport(a){
+  const start = parseLocalDate(a.start_date_local);
+  const durationSec = a.moving_time || a.elapsed_time;
+  const end = new Date(start.getTime() + a.elapsed_time*1000);
+  const g = analyzeGlucose(glucoseRows, start, end);
+
+  if(!g){
     $('report').innerHTML = '<div class="card"><div class="error">No glucose readings overlap this run\'s time window — check the CSV covers the right day.</div></div>';
     return;
   }
 
-  const duringRun = windowRows.filter(r => r.t >= start && r.t <= end);
-  const vals = (duringRun.length ? duringRun : windowRows).map(r => r.val);
-  const avg = Math.round(vals.reduce((s,v)=>s+v,0)/vals.length);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const startVal = vals[0];
-  const endVal = vals[vals.length-1];
-  const delta = endVal - startVal;
-
-  const distMi = (a.distance/1609.34);
+  const distMi = a.distance/MI;
   const pace = fmtPace(a.average_speed);
   const dateStr = start.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
+  const deltaSign = g.delta > 0 ? '+' : '';
+  const trendWord = g.delta > 15 ? 'climbed' : g.delta < -15 ? 'dropped' : 'stayed steady';
 
-  let trendWord, trendEmoji;
-  if(delta > 15){trendWord='climbed'; trendEmoji='📈';}
-  else if(delta < -15){trendWord='dropped'; trendEmoji='📉';}
-  else {trendWord='stayed steady'; trendEmoji='➡️';}
+  const splits = (a.splits_standard || []).filter(s => s.moving_time > 0 && s.distance > 200);
+  const story = generateStory(a, g, start, end);
+  const blurb = generateBlurb(g, distMi, pace, trendWord);
+  const caption = generateCaption(g, distMi, pace, trendWord);
 
-  const blurb = generateBlurb({distMi, pace, avg, min, max, trendWord, unit: glucoseUnit});
-  const caption = generateCaption({distMi, pace, avg, trendWord, name: a.name});
-
-  const svg = buildOverlaySVG(windowRows, start, end, min, max);
+  const statTiles = [
+    {label:'Distance', val: distMi.toFixed(2), unit:' mi', color:'var(--strava-ink)'},
+    {label:'Time', val: fmtDur(durationSec), unit:'', color:'var(--strava-ink)'},
+    {label:'Avg pace', val: pace.replace('/mi',''), unit:' /mi', color:'var(--strava-ink)'},
+    a.total_elevation_gain > 0 ? {label:'Elev gain', val: Math.round(a.total_elevation_gain*3.281), unit:' ft', color:'var(--strava-ink)'} : null,
+    a.average_heartrate ? {label:'Avg HR', val: Math.round(a.average_heartrate), unit:' bpm', color:'var(--strava-ink)'} : null,
+    {label:'Avg glucose', val: fmtG(g.avg), unit:' '+glucoseUnit, color:'var(--glucose-ink)'},
+    {label:'In range', val: g.tir, unit:' %', sub:'target '+fmtG(g.lo)+'–'+fmtG(g.hi), color:'var(--glucose-ink)'},
+    {label:'Start → finish', val: deltaSign + fmtG(g.delta), unit:' '+glucoseUnit, sub: fmtG(g.startVal)+' → '+fmtG(g.endVal), color:'var(--glucose-ink)'}
+  ].filter(Boolean);
 
   $('report').innerHTML = `
-    <div class="report-hero">
+    <div class="report-hero reveal">
       <div class="hero-top">
-        <div class="hero-name">${a.name}</div>
-        <div class="hero-date">${dateStr}</div>
+        <div class="hero-name">${esc(a.name)}</div>
+        <div class="hero-date">${dateStr}<br>${fmtClock(start)} – ${fmtClock(end)}</div>
       </div>
-      <div class="legend">
-        <span><span class="dot" style="background:var(--strava)"></span>Pace</span>
-        <span><span class="dot" style="background:var(--glucose)"></span>Glucose (${glucoseUnit})</span>
-      </div>
-      ${svg}
+
       <div class="stat-grid">
-        <div class="stat"><div class="stat-label">Distance</div><div class="stat-val strava">${distMi.toFixed(2)} mi</div></div>
-        <div class="stat"><div class="stat-label">Avg pace</div><div class="stat-val strava">${pace}</div></div>
-        <div class="stat"><div class="stat-label">Avg glucose</div><div class="stat-val glucose">${avg}</div></div>
-        <div class="stat"><div class="stat-label">Range</div><div class="stat-val glucose">${min}–${max}</div></div>
+        ${statTiles.map(t => `
+          <div class="stat">
+            <div class="stat-label"><span class="stat-mark" style="background:${t.color}"></span>${t.label}</div>
+            <div class="stat-val">${t.val}<small>${t.unit}</small></div>
+            ${t.sub ? `<div class="stat-sub">${t.sub}</div>` : ''}
+          </div>`).join('')}
       </div>
-      <div class="blurb">${trendEmoji} ${blurb}</div>
+
+      <div class="section-title">Glucose · ${glucoseUnit}</div>
+      ${buildGlucoseChart(g, start, end)}
+      <div class="chart-key">
+        <span><span class="key-line"></span>glucose</span>
+        <span><span class="key-band"></span>run window</span>
+        <span><span class="key-target"></span>target ${fmtG(g.lo)}–${fmtG(g.hi)}</span>
+      </div>
+
+      ${splits.length >= 2 ? `
+        <div class="section-title">Mile splits</div>
+        <div class="splits">${buildSplits(splits)}</div>` : ''}
+
+      <div class="section-title">The story</div>
+      <div class="story">${story}</div>
+
+      <div class="blurb">${blurb}</div>
+
       <div class="caption-box">
-        <div class="caption-text" id="caption-text">"${caption}"</div>
+        <div class="caption-text">"${esc(caption)}"</div>
         <button class="copy-btn" id="copy-caption">Copy</button>
       </div>
+
+      ${buildTableView(g, splits, start, end)}
     </div>
   `;
+
+  attachChartInteraction(g, start, end);
 
   $('copy-caption').addEventListener('click', () => {
     navigator.clipboard.writeText(caption);
@@ -527,55 +763,268 @@ function buildReport(){
   });
 }
 
-function generateBlurb({distMi, pace, avg, min, max, trendWord, unit}){
-  const swing = max - min;
-  let swingNote = swing < 30 ? 'nice and stable the whole way' : swing < 60 ? 'had some natural movement' : 'swung around a fair bit';
-  return `Over ${distMi.toFixed(1)} miles at ${pace}, her glucose averaged ${avg} ${unit} and ${swingNote}, ${trendWord} from start to finish.`;
+// ---------- narrative ----------
+function trendPhrase(delta){
+  const th = glucoseUnit === 'mmol/L' ? 0.6 : 10;
+  if(delta > th) return 'climbing';
+  if(delta < -th) return 'drifting down';
+  return 'holding steady';
+}
+function trendPast(delta){
+  const th = glucoseUnit === 'mmol/L' ? 0.6 : 10;
+  if(delta > th) return 'climbed';
+  if(delta < -th) return 'drifted down';
+  return 'held steady';
 }
 
-function generateCaption({distMi, pace, avg, trendWord, name}){
+function generateStory(a, g, start, end){
+  const blocks = [];
+  if(g.pre.length >= 2){
+    const preDelta = g.pre[g.pre.length-1].val - g.pre[0].val;
+    const preMin = Math.round((start - g.pre[0].t)/60000);
+    blocks.push({when:'Before', text:
+      `She toed the line at <b>${fmtG(g.pre[g.pre.length-1].val)} ${glucoseUnit}</b>, ${trendPhrase(preDelta)} through the ${preMin} minutes before the start.`});
+  }
+  if(g.during.length >= 1){
+    const lowBit = g.minRow.val < g.lo
+      ? `It dipped below range to <b>${fmtG(g.minRow.val)}</b> around minute ${Math.max(g.minAtMin,0)} — worth a glance at fueling next time.`
+      : `The low point was <b>${fmtG(g.minRow.val)}</b> around minute ${Math.max(g.minAtMin,0)}, still inside her target range.`;
+    blocks.push({when:'During', text:
+      `Across the run itself glucose ${trendPast(g.delta)}, with <b>${g.tir}%</b> of readings in range. ${lowBit}`});
+  }
+  if(g.post.length >= 2){
+    const postDelta = g.post[g.post.length-1].val - g.post[0].val;
+    const postMin = Math.round((g.post[g.post.length-1].t - end)/60000);
+    blocks.push({when:'After', text:
+      `In the ${postMin} minutes after she stopped, glucose was ${trendPhrase(postDelta)}, finishing the window at <b>${fmtG(g.post[g.post.length-1].val)} ${glucoseUnit}</b>.`});
+  }
+  if(a.average_heartrate){
+    blocks.push({when:'Effort', text:
+      `Average heart rate was <b>${Math.round(a.average_heartrate)} bpm</b>${a.total_elevation_gain > 0 ? ` over ${Math.round(a.total_elevation_gain*3.281)} ft of climbing` : ''}${a.calories ? `, burning roughly ${Math.round(a.calories)} calories` : ''}.`});
+  }
+  return blocks.map(b => `
+    <div class="story-block">
+      <div class="story-when">${b.when}</div>
+      <div class="story-text">${b.text}</div>
+    </div>`).join('');
+}
+
+function generateBlurb(g, distMi, pace, trendWord){
+  const swingNote = g.swing < (glucoseUnit==='mmol/L'?1.7:30) ? 'nice and stable the whole way'
+    : g.swing < (glucoseUnit==='mmol/L'?3.3:60) ? 'with some natural movement'
+    : 'swinging around a fair bit';
+  const emoji = g.delta > 15 ? '📈' : g.delta < -15 ? '📉' : '➡️';
+  return `${emoji} Over ${distMi.toFixed(1)} miles at ${pace}, her glucose averaged ${fmtG(g.avg)} ${glucoseUnit} and ${trendWord} from start to finish, ${swingNote} — ${g.tir}% of the run in range.`;
+}
+
+function generateCaption(g, distMi, pace, trendWord){
   const templates = [
-    `${distMi.toFixed(1)} miles, ${pace} pace, glucose ${trendWord} the whole way — running on more than just willpower today.`,
+    `${distMi.toFixed(1)} miles at ${pace}, ${g.tir}% in range — running on more than just willpower today.`,
     `Legs at ${pace}, sugar ${trendWord} — a solid team effort out there.`,
-    `${distMi.toFixed(1)} miles down, avg glucose ${avg} — the numbers behaved today.`
+    `${distMi.toFixed(1)} miles down, glucose ${fmtG(g.startVal)} → ${fmtG(g.endVal)} — the numbers behaved today.`,
+    `Pancreas on manual mode, ${distMi.toFixed(1)} miles anyway. ${g.tir}% in range.`
   ];
   return templates[Math.floor(Math.random()*templates.length)];
 }
 
-function buildOverlaySVG(rows, start, end, min, max){
-  const W = 700, H = 220, padL = 40, padR = 10, padT = 10, padB = 26;
-  const t0 = rows[0].t.getTime(), t1 = rows[rows.length-1].t.getTime();
-  const span = Math.max(t1-t0, 1);
-  const xOf = (t) => padL + (t-t0)/span * (W-padL-padR);
-  const yMin = Math.min(min, ...rows.map(r=>r.val)) - 10;
-  const yMax = Math.max(max, ...rows.map(r=>r.val)) + 10;
-  const yOf = (v) => H-padB - (v-yMin)/(yMax-yMin) * (H-padT-padB);
+// ---------- glucose chart ----------
+const CH = { W: 720, H: 280, padL: 48, padR: 14, padT: 16, padB: 32 };
+let chartGeom = null; // set at build time, used by the interaction layer
 
-  const runX0 = xOf(start.getTime());
-  const runX1 = xOf(end.getTime());
+function niceTicks(lo, hi, n){
+  const span = (hi - lo) || 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(span/n)));
+  const norm = span/n/mag;
+  const step = (norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10) * mag;
+  const ticks = [];
+  for(let v = Math.ceil(lo/step)*step; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
+  return ticks;
+}
+
+function buildGlucoseChart(g, start, end){
+  const {W, H, padL, padR, padT, padB} = CH;
+  const rows = g.win;
+  const t0 = rows[0].t.getTime(), t1 = rows[rows.length-1].t.getTime();
+  const span = Math.max(t1 - t0, 1);
+  const vPad = glucoseUnit === 'mmol/L' ? 0.8 : 12;
+  const vMin = Math.min(...rows.map(r=>r.val)) - vPad;
+  const vMax = Math.max(...rows.map(r=>r.val)) + vPad;
+
+  const xOf = t => padL + (t - t0)/span * (W - padL - padR);
+  const yOf = v => H - padB - (v - vMin)/(vMax - vMin) * (H - padT - padB);
+  chartGeom = {t0, t1, xOf, yOf};
+
+  const runX0 = Math.max(xOf(start.getTime()), padL);
+  const runX1 = Math.min(xOf(end.getTime()), W - padR);
 
   let path = '';
   rows.forEach((r,i) => {
-    const x = xOf(r.t.getTime()), y = yOf(r.val);
-    path += (i===0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    path += (i===0 ? 'M' : 'L') + xOf(r.t.getTime()).toFixed(1) + ',' + yOf(r.val).toFixed(1) + ' ';
+  });
+  const area = path + 'L' + xOf(t1).toFixed(1) + ',' + (H-padB) + ' L' + xOf(t0).toFixed(1) + ',' + (H-padB) + ' Z';
+
+  // y ticks: clean numbers, hairline solid grid
+  const yTicks = niceTicks(vMin, vMax, 4);
+  let grid = '', yLabels = '';
+  yTicks.forEach(v => {
+    const y = yOf(v).toFixed(1);
+    grid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#222a37" stroke-width="1"/>`;
+    yLabels += `<text x="${padL-8}" y="${y}" dy="3.5" fill="#6b7686" font-size="10.5" text-anchor="end" font-family="JetBrains Mono, monospace">${glucoseUnit==='mmol/L' ? v : Math.round(v)}</text>`;
   });
 
-  // gridlines
-  let grid = '';
-  for(let i=0;i<=3;i++){
-    const y = padT + i*(H-padT-padB)/3;
-    grid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#2a3341" stroke-width="1"/>`;
+  // x ticks: clock times on clean boundaries
+  const spanMin = span/60000;
+  const stepMin = spanMin > 180 ? 60 : spanMin > 90 ? 30 : spanMin > 45 ? 15 : 10;
+  let xLabels = '';
+  let tick = new Date(t0);
+  tick.setSeconds(0,0);
+  tick.setMinutes(Math.ceil(tick.getMinutes()/stepMin)*stepMin);
+  while(tick.getTime() <= t1){
+    xLabels += `<text x="${xOf(tick.getTime()).toFixed(1)}" y="${H-padB+16}" fill="#6b7686" font-size="10.5" text-anchor="middle" font-family="JetBrains Mono, monospace">${fmtClock(tick)}</text>`;
+    tick = new Date(tick.getTime() + stepMin*60000);
   }
 
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:4px;">
-    ${grid}
-    <rect x="${runX0.toFixed(1)}" y="${padT}" width="${Math.max(runX1-runX0,2).toFixed(1)}" height="${H-padT-padB}" fill="#ff5a2e" opacity="0.12"/>
-    <line x1="${runX0.toFixed(1)}" y1="${padT}" x2="${runX0.toFixed(1)}" y2="${H-padB}" stroke="#ff5a2e" stroke-width="1.5" stroke-dasharray="3,3"/>
-    <line x1="${runX1.toFixed(1)}" y1="${padT}" x2="${runX1.toFixed(1)}" y2="${H-padB}" stroke="#ff5a2e" stroke-width="1.5" stroke-dasharray="3,3"/>
-    <path d="${path}" fill="none" stroke="#45e0c4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    <text x="${runX0.toFixed(1)}" y="${H-8}" fill="#9aa4b4" font-size="10" font-family="JetBrains Mono, monospace">start</text>
-    <text x="${runX1.toFixed(1)}" y="${H-8}" fill="#9aa4b4" font-size="10" font-family="JetBrains Mono, monospace" text-anchor="end">finish</text>
-  </svg>`;
+  // target range: dashed threshold lines (only where they fall inside the plot)
+  let target = '';
+  [g.lo, g.hi].forEach(v => {
+    if(v > vMin && v < vMax){
+      const y = yOf(v).toFixed(1);
+      target += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#6b7686" stroke-width="1.5" stroke-dasharray="4,4" opacity=".55"/>`;
+    }
+  });
+
+  // low-point marker: dot with surface ring + selective direct label
+  const minX = xOf(g.minRow.t.getTime()), minY = yOf(g.minRow.val);
+  const labelAbove = minY > H - padB - 26;
+  const lowMark = `
+    <circle cx="${minX.toFixed(1)}" cy="${minY.toFixed(1)}" r="6" fill="#10141b"/>
+    <circle cx="${minX.toFixed(1)}" cy="${minY.toFixed(1)}" r="4" fill="#1da88f"/>
+    <text x="${minX.toFixed(1)}" y="${(labelAbove ? minY - 12 : minY + 20).toFixed(1)}" fill="#9aa4b4" font-size="10.5" text-anchor="middle" font-family="JetBrains Mono, monospace">low ${fmtG(g.minRow.val)}</text>`;
+
+  return `
+  <div class="chart-wrap" id="chart-wrap" tabindex="0" role="img"
+       aria-label="Glucose over time around the run. Low of ${fmtG(g.minRow.val)} ${glucoseUnit}. Full data in the table below. Use arrow keys to step through readings.">
+    <svg id="gchart" viewBox="0 0 ${W} ${H}">
+      ${grid}
+      <rect x="${runX0.toFixed(1)}" y="${padT}" width="${Math.max(runX1-runX0,2).toFixed(1)}" height="${H-padT-padB}" fill="#d94518" opacity="0.09"/>
+      <line x1="${runX0.toFixed(1)}" y1="${padT}" x2="${runX0.toFixed(1)}" y2="${H-padB}" stroke="#d94518" stroke-width="1"/>
+      <line x1="${runX1.toFixed(1)}" y1="${padT}" x2="${runX1.toFixed(1)}" y2="${H-padB}" stroke="#d94518" stroke-width="1"/>
+      <text x="${(runX0+5).toFixed(1)}" y="${padT+12}" fill="#9aa4b4" font-size="10" font-family="JetBrains Mono, monospace">start</text>
+      <text x="${(runX1-5).toFixed(1)}" y="${padT+12}" fill="#9aa4b4" font-size="10" text-anchor="end" font-family="JetBrains Mono, monospace">finish</text>
+      ${target}
+      <path d="${area}" fill="#1da88f" opacity="0.09"/>
+      <path d="${path}" fill="none" stroke="#1da88f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${lowMark}
+      ${yLabels}
+      ${xLabels}
+      <g id="cross" style="display:none">
+        <line id="cross-line" y1="${padT}" y2="${H-padB}" stroke="#9aa4b4" stroke-width="1"/>
+        <circle id="cross-ring" r="6" fill="#10141b"/>
+        <circle id="cross-dot" r="4" fill="#1da88f"/>
+      </g>
+    </svg>
+    <div class="tooltip" id="gtip">
+      <div class="tt-val" id="tt-val"></div>
+      <div class="tt-time" id="tt-time"></div>
+      <div class="tt-phase" id="tt-phase"></div>
+    </div>
+  </div>`;
+}
+
+function attachChartInteraction(g, start, end){
+  const wrap = $('chart-wrap'), svg = $('gchart'), tip = $('gtip'), cross = $('cross');
+  const rows = g.win;
+  let idx = -1;
+
+  function show(i){
+    idx = Math.max(0, Math.min(rows.length-1, i));
+    const r = rows[idx];
+    const x = chartGeom.xOf(r.t.getTime()), y = chartGeom.yOf(r.val);
+    cross.style.display = '';
+    $('cross-line').setAttribute('x1', x); $('cross-line').setAttribute('x2', x);
+    $('cross-ring').setAttribute('cx', x); $('cross-ring').setAttribute('cy', y);
+    $('cross-dot').setAttribute('cx', x);  $('cross-dot').setAttribute('cy', y);
+
+    // tooltip content via textContent — CSV/API strings are untrusted
+    $('tt-val').textContent = '';
+    $('tt-val').appendChild(document.createTextNode(fmtG(r.val) + ' '));
+    const u = document.createElement('small'); u.textContent = glucoseUnit;
+    $('tt-val').appendChild(u);
+    $('tt-time').textContent = fmtClock(r.t);
+    $('tt-phase').textContent = r.t < start ? 'before the run' : r.t > end ? 'after the run' : 'during the run';
+
+    const rect = svg.getBoundingClientRect();
+    const px = x/CH.W * rect.width, py = y/CH.H * rect.height;
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth;
+    let left = px + 14;
+    if(left + tw > rect.width) left = px - tw - 14;
+    tip.style.left = Math.max(0, left) + 'px';
+    tip.style.top = Math.max(0, py - 64) + 'px';
+  }
+  function hide(){ idx = -1; cross.style.display = 'none'; tip.style.display = 'none'; }
+
+  // crosshair snaps to the nearest reading — readers aim at a time, not a 2px line
+  svg.addEventListener('pointermove', e => {
+    const rect = svg.getBoundingClientRect();
+    const vx = (e.clientX - rect.left)/rect.width * CH.W;
+    const t = chartGeom.t0 + (vx - CH.padL)/(CH.W - CH.padL - CH.padR) * (chartGeom.t1 - chartGeom.t0);
+    let best = 0, bestD = Infinity;
+    rows.forEach((r,i) => { const d = Math.abs(r.t.getTime() - t); if(d < bestD){ bestD = d; best = i; } });
+    show(best);
+  });
+  svg.addEventListener('pointerleave', hide);
+  wrap.addEventListener('keydown', e => {
+    if(e.key === 'ArrowRight'){ show(idx < 0 ? 0 : idx+1); e.preventDefault(); }
+    else if(e.key === 'ArrowLeft'){ show(idx < 0 ? rows.length-1 : idx-1); e.preventDefault(); }
+    else if(e.key === 'Escape'){ hide(); }
+  });
+  wrap.addEventListener('blur', hide);
+}
+
+// ---------- splits ----------
+function buildSplits(splits){
+  const speeds = splits.map(s => s.average_speed);
+  const maxSp = Math.max(...speeds);
+  const fastest = speeds.indexOf(maxSp);
+  return splits.map((s, i) => {
+    const pct = Math.max(4, (s.average_speed / maxSp) * 100);
+    const partial = s.distance < MI * 0.95;
+    const label = partial ? (s.distance/MI).toFixed(1) + ' mi' : (i+1) + ' mi';
+    return `
+    <div class="split-row${i === fastest ? ' fastest' : ''}">
+      <div class="split-mi">${label}</div>
+      <div class="split-track"><div class="split-bar" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="split-pace">${fmtPace(s.average_speed).replace('/mi','')}${i === fastest ? '<span class="split-tag">fastest</span>' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- table view (accessibility twin of the charts) ----------
+function buildTableView(g, splits, start, end){
+  const gRows = g.win.map(r =>
+    `<tr><td>${fmtClock(r.t)}</td><td>${fmtG(r.val)}</td><td>${r.t < start ? 'before' : r.t > end ? 'after' : 'run'}</td></tr>`).join('');
+  const sRows = splits.map((s,i) =>
+    `<tr><td>${i+1}</td><td>${fmtPace(s.average_speed)}</td><td>${s.elevation_difference != null ? Math.round(s.elevation_difference*3.281) + ' ft' : '—'}</td><td>${s.average_heartrate ? Math.round(s.average_heartrate) + ' bpm' : '—'}</td></tr>`).join('');
+  return `
+  <details class="tableview">
+    <summary>View the data as a table</summary>
+    <div class="tbl-scroll">
+      <table class="data">
+        <caption>Glucose readings (${glucoseUnit})</caption>
+        <thead><tr><th>Time</th><th>Glucose</th><th>Phase</th></tr></thead>
+        <tbody>${gRows}</tbody>
+      </table>
+    </div>
+    ${splits.length ? `
+    <div class="tbl-scroll">
+      <table class="data">
+        <caption>Mile splits</caption>
+        <thead><tr><th>Mile</th><th>Pace</th><th>Elev Δ</th><th>HR</th></tr></thead>
+        <tbody>${sRows}</tbody>
+      </table>
+    </div>` : ''}
+  </details>`;
 }
 </script>
 </body>
