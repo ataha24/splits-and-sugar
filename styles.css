@@ -175,6 +175,14 @@
     @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   }
   .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:4px;}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .badge{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;
+    padding:5px 11px;border-radius:999px;
+  }
+  .badge.teal{color:var(--glucose);border:1px solid rgba(69,224,196,.45);}
+  .badge.orange{color:var(--strava);border:1px solid rgba(255,90,46,.5);}
   .hero-name{font-family:'Oswald',sans-serif;font-size:24px;font-weight:600;letter-spacing:.01em;}
   .hero-date{color:var(--text-dim);font-size:12.5px;font-family:'JetBrains Mono',monospace;text-align:right;line-height:1.7;}
 
@@ -192,6 +200,29 @@
     display:flex;align-items:center;gap:10px;
   }
   .section-title::after{content:'';flex:1;height:1px;background:var(--line);}
+
+  /* Time-in-range bar */
+  .tir-bar{display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;margin:2px 0 6px;}
+  .tir-seg.low{background:#e05c5c;}
+  .tir-seg.in{background:var(--glucose-ink);}
+  .tir-seg.high{background:var(--warn);}
+  .tir-labels{
+    display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;
+    font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);
+  }
+  .tir-labels span{display:flex;align-items:center;gap:6px;}
+  .tir-dot{width:9px;height:9px;border-radius:3px;display:inline-block;}
+  .tir-dot.low{background:#e05c5c;}
+  .tir-dot.in{background:var(--glucose-ink);}
+  .tir-dot.high{background:var(--warn);}
+
+  /* Insights */
+  .insight{
+    display:flex;gap:12px;align-items:flex-start;
+    background:var(--bg-raise);border:1px solid var(--line);border-radius:11px;
+    padding:12px 15px;
+  }
+  .insight-icon{font-size:16px;line-height:1.5;flex-shrink:0;}
 
   /* Glucose chart */
   .chart-wrap{position:relative;margin-top:6px;outline:none;border-radius:10px;}
@@ -219,7 +250,8 @@
 
   /* Splits */
   .splits{margin-top:4px;display:flex;flex-direction:column;gap:6px;}
-  .split-row{display:grid;grid-template-columns:44px 1fr 96px;align-items:center;gap:10px;}
+  .split-row{display:grid;grid-template-columns:44px 1fr 96px 52px;align-items:center;gap:10px;}
+  .split-g{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--glucose);text-align:right;}
   .split-mi{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-mute);text-align:right;}
   .split-track{height:18px;position:relative;}
   .split-bar{
@@ -297,5 +329,5 @@
     h1{font-size:33px;}
     .report-hero{padding:20px 16px 18px;}
     .hero-date{text-align:left;}
-    .split-row{grid-template-columns:36px 1fr 88px;}
+    .split-row{grid-template-columns:36px 1fr 80px 42px;}
   }

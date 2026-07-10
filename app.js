@@ -307,16 +307,6 @@ function loadDemoData(){
   glucoseUnit = 'mg/dL';
 }
 
-on('btn-demo', 'click', () => {
-  loadDemoData();
-  $('demo-status').innerHTML = '<div class="ok">Demo run + synthetic glucose data loaded.</div>';
-  $('card-strava').classList.add('done');
-  $('card-glucose').classList.add('done');
-  setStep(1,'complete');
-  setStep(2,'complete');
-  checkReady();
-});
-
 // For pages that render the demo report directly (e.g. sample.html). The real
 // button flow merges fetched detail into the activity, but fetchActivityDetail
 // returns null for demo data, so buildReport(selectedActivity) is equivalent.
@@ -371,6 +361,7 @@ function analyzeGlucose(rows, start, end){
   let minRow = core[0], maxRow = core[0];
   core.forEach(r => { if(r.val < minRow.val) minRow = r; if(r.val > maxRow.val) maxRow = r; });
   const inRange = vals.filter(v => v >= lo && v <= hi).length;
+  const nLow = vals.filter(v => v < lo).length;
   return {
     win, pre, during, post, lo, hi,
     avg, minRow, maxRow,
@@ -378,6 +369,8 @@ function analyzeGlucose(rows, start, end){
     endVal: core[core.length-1].val,
     delta: core[core.length-1].val - core[0].val,
     tir: Math.round(100 * inRange / vals.length),
+    tirLow: Math.round(100 * nLow / vals.length),
+    tirHigh: Math.round(100 * (vals.length - inRange - nLow) / vals.length),
     swing: maxRow.val - minRow.val,
     minAtMin: Math.round((minRow.t - start)/60000)
   };
@@ -399,12 +392,27 @@ function buildReport(a){
   const pace = fmtPace(a.average_speed);
   const dateStr = start.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
   const deltaSign = g.delta > 0 ? '+' : '';
-  const trendWord = g.delta > 15 ? 'climbed' : g.delta < -15 ? 'dropped' : 'stayed steady';
+  const deltaTh = glucoseUnit === 'mmol/L' ? 0.83 : 15;
+  const trendWord = g.delta > deltaTh ? 'climbed' : g.delta < -deltaTh ? 'dropped' : 'stayed steady';
 
   const splits = (a.splits_standard || []).filter(s => s.moving_time > 0 && s.distance > 200);
+  // tag each split with its time window and the avg glucose inside it
+  // (moving_time cumulated from the start — a close-enough approximation
+  // unless the run had long pauses)
+  let tCursor = start.getTime();
+  splits.forEach(s => {
+    s._t0 = tCursor;
+    s._t1 = tCursor + s.moving_time*1000;
+    const inWin = g.win.filter(r => r.t >= s._t0 && r.t <= s._t1);
+    s._g = inWin.length ? inWin.reduce((sum,r) => sum+r.val, 0)/inWin.length : null;
+    tCursor = s._t1;
+  });
+
   const story = generateStory(a, g, start, end);
   const blurb = generateBlurb(g, distMi, pace, trendWord);
   const caption = generateCaption(g, distMi, pace, trendWord);
+  const insights = generateInsights(g, splits, start, end);
+  const badges = generateBadges(g, splits, start);
 
   const statTiles = [
     {label:'Distance', val: distMi.toFixed(2), unit:' mi', color:'var(--strava-ink)'},
@@ -423,6 +431,7 @@ function buildReport(a){
         <div class="hero-name">${esc(a.name)}</div>
         <div class="hero-date">${dateStr}<br>${fmtClock(start)} – ${fmtClock(end)}</div>
       </div>
+      ${badges.length ? `<div class="badges">${badges.map(b => `<span class="badge ${b.c}">${b.t}</span>`).join('')}</div>` : ''}
 
       <div class="stat-grid">
         ${statTiles.map(t => `
@@ -434,6 +443,7 @@ function buildReport(a){
       </div>
 
       <div class="section-title">Glucose · ${glucoseUnit}</div>
+      ${buildTirBar(g)}
       ${buildGlucoseChart(g, start, end)}
       <div class="chart-key">
         <span><span class="key-line"></span>glucose</span>
@@ -443,7 +453,17 @@ function buildReport(a){
 
       ${splits.length >= 2 ? `
         <div class="section-title">Mile splits</div>
-        <div class="splits">${buildSplits(splits)}</div>` : ''}
+        <div class="splits">${buildSplits(splits)}</div>
+        <div class="chart-key" style="margin-top:10px;">
+          <span><span class="key-band" style="background:rgba(217,69,24,.42);border-color:rgba(217,69,24,.7);"></span>bar length = speed</span>
+          <span style="color:var(--glucose)">right column = avg glucose (${glucoseUnit})</span>
+        </div>` : ''}
+
+      ${insights.length ? `
+        <div class="section-title">Worth noticing</div>
+        <div class="story">${insights.map(i => `
+          <div class="insight"><span class="insight-icon">${i.icon}</span><div class="story-text">${i.text}</div></div>`).join('')}
+        </div>` : ''}
 
       <div class="section-title">The story</div>
       <div class="story">${story}</div>
@@ -464,7 +484,7 @@ function buildReport(a){
     </div>
   `;
 
-  lastReport = {a, g, start, end, dateStr, distMi, pace, caption};
+  lastReport = {a, g, start, end, dateStr, distMi, pace, caption, badges};
   attachChartInteraction(g, start, end);
 
   $('copy-caption').addEventListener('click', () => {
@@ -495,8 +515,18 @@ function wrapLines(ctx, text, maxW, maxLines){
   return lines;
 }
 
+function roundedRectPath(ctx, rx, ry, rw, rh, rr){
+  ctx.beginPath();
+  ctx.moveTo(rx + rr, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, rr);
+  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, rr);
+  ctx.arcTo(rx, ry + rh, rx, ry, rr);
+  ctx.arcTo(rx, ry, rx + rw, ry, rr);
+  ctx.closePath();
+}
+
 function renderShareCanvas(){
-  const {a, g, start, end, dateStr, distMi, pace, caption} = lastReport;
+  const {a, g, start, end, dateStr, distMi, pace, caption, badges} = lastReport;
   const W = 1080, H = 1350, P = 84;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -523,7 +553,26 @@ function renderShareCanvas(){
   x.fillStyle = '#9aa4b4';
   x.font = '400 27px "JetBrains Mono", monospace';
   x.fillText(dateStr + '  ·  ' + fmtClock(start) + ' – ' + fmtClock(end), P, y);
-  y += 66;
+  y += 60;
+
+  if(badges && badges.length){
+    x.font = '600 21px "JetBrains Mono", monospace';
+    let bx = P;
+    badges.forEach(b => {
+      const label = b.t.toUpperCase();
+      const tw = x.measureText(label).width;
+      x.strokeStyle = b.c === 'orange' ? 'rgba(255,90,46,.7)' : 'rgba(69,224,196,.6)';
+      x.lineWidth = 2;
+      roundedRectPath(x, bx, y - 30, tw + 36, 44, 22);
+      x.stroke();
+      x.fillStyle = b.c === 'orange' ? '#ff5a2e' : '#45e0c4';
+      x.fillText(label, bx + 18, y);
+      bx += tw + 50;
+    });
+    y += 62;
+  } else {
+    y += 6;
+  }
 
   // stats: two rows of three
   const stats = [
@@ -610,11 +659,12 @@ function renderShareCanvas(){
   const labelAbove = lyv > cy1 - 44;
   x.fillText(lowLabel, Math.min(Math.max(lx - x.measureText(lowLabel).width/2, cx0), cx1 - x.measureText(lowLabel).width), labelAbove ? lyv - 24 : lyv + 44);
 
-  // caption
-  let capY = cy1 + 88;
+  // caption (lines capped so a tall title + badges can't push past the footer)
+  let capY = cy1 + 84;
+  const maxCapLines = Math.max(1, Math.min(3, Math.floor((H - 130 - capY)/48) + 1));
   x.fillStyle = '#f2f0ea';
   x.font = 'italic 500 33px Inter, sans-serif';
-  wrapLines(x, '“' + caption + '”', W - 2*P, 3).forEach(l => { x.fillText(l, P, capY); capY += 48; });
+  wrapLines(x, '“' + caption + '”', W - 2*P, maxCapLines).forEach(l => { x.fillText(l, P, capY); capY += 48; });
 
   // footer
   x.fillStyle = '#6b7686';
@@ -646,6 +696,108 @@ async function downloadShareImage(){
   }finally{
     btn.disabled = false; btn.textContent = 'Download share image';
   }
+}
+
+// ---------- time-in-range bar ----------
+function buildTirBar(g){
+  const segs = [
+    {key:'low',  pct: g.tirLow,  label:'below'},
+    {key:'in',   pct: g.tir,     label:'in range'},
+    {key:'high', pct: g.tirHigh, label:'above'}
+  ].filter(s => s.pct > 0);
+  return `
+  <div class="tir-bar" aria-hidden="true">
+    ${segs.map(s => `<div class="tir-seg ${s.key}" style="flex:${s.pct}"></div>`).join('')}
+  </div>
+  <div class="tir-labels">
+    ${segs.map(s => `<span><span class="tir-dot ${s.key}"></span>${s.label} ${s.pct}%</span>`).join('')}
+  </div>`;
+}
+
+// ---------- insights & badges ----------
+// Data-driven observations, worded as patterns to notice — not advice.
+function generateInsights(g, splits, start, end){
+  const mmol = glucoseUnit === 'mmol/L';
+  const out = [];
+  const dur = g.during;
+
+  // steepest sustained drop: most negative slope over any ~10–20 min stretch
+  let drop = null;
+  for(let i = 0; i < dur.length; i++){
+    for(let j = i+1; j < dur.length; j++){
+      const dt = (dur[j].t - dur[i].t)/60000;
+      if(dt < 9) continue;
+      if(dt > 21) break;
+      const rate = (dur[j].val - dur[i].val)/dt;
+      if(!drop || rate < drop.rate){
+        drop = {rate, at: Math.round(((dur[i].t.getTime() + dur[j].t.getTime())/2 - start.getTime())/60000)};
+      }
+    }
+  }
+
+  if(g.tir === 100 && dur.length >= 3){
+    out.push({icon:'🖼️', text:'Every single reading stayed in range — frame this one.'});
+  }
+  if(g.minRow.val < g.lo){
+    const rec = g.post.find(r => r.val >= g.lo);
+    out.push({icon:'🩹', text: rec
+      ? `Glucose slipped below range around minute ${Math.max(g.minAtMin,0)} but was back inside within ${Math.max(Math.round((rec.t - end)/60000),1)} minutes of stopping — a tidy comeback.`
+      : `Glucose slipped below range around minute ${Math.max(g.minAtMin,0)} and hadn't recovered by the end of the window — worth keeping fast carbs closer next time.`});
+  }
+  const dropTh = mmol ? 0.055 : 1.0;
+  if(drop && drop.rate <= -dropTh){
+    const perMin = Math.abs(mmol ? drop.rate.toFixed(2) : drop.rate.toFixed(1));
+    out.push({icon:'📉', text:`The steepest slide was ~<b>${perMin} ${glucoseUnit} per minute</b> around minute ${drop.at}. If that pattern repeats, taking fuel about 15 minutes before that point is the classic counter-move.`});
+  }
+  const fullSplits = splits.filter(s => s.distance >= MI*0.95);
+  if(fullSplits.length >= 2){
+    const slowest = fullSplits.reduce((worst, s) => s.average_speed < worst.average_speed ? s : worst);
+    const minT = g.minRow.t.getTime();
+    if(minT >= slowest._t0 - 3*60000 && minT <= slowest._t1 + 3*60000){
+      const idx = splits.indexOf(slowest) + 1;
+      out.push({icon:'🐢', text:`The slowest mile (${idx}, ${fmtPace(slowest.average_speed)}) lined up with the glucose low — legs listen to sugar.`});
+    }
+  }
+  if(fullSplits.length >= 4){
+    const half = Math.floor(fullSplits.length/2);
+    const avgSp = arr => arr.reduce((s,x) => s + x.average_speed, 0)/arr.length;
+    const secFaster = MI/avgSp(fullSplits.slice(0, half)) - MI/avgSp(fullSplits.slice(-half));
+    if(secFaster > 5){
+      out.push({icon:'⚡', text:`Negative split — the back half averaged <b>${Math.round(secFaster)} seconds per mile faster</b> than the front. Strong finish.`});
+    }
+  }
+  if(g.post.length >= 2){
+    const pd = g.post[g.post.length-1].val - g.post[0].val;
+    const pmin = Math.round((g.post[g.post.length-1].t - end)/60000);
+    if(pd > (mmol ? 1.7 : 30)){
+      out.push({icon:'🔁', text:`Glucose rebounded <b>+${fmtG(pd)} ${glucoseUnit}</b> in the ${pmin} minutes after stopping — the classic post-run bounce, a pattern worth watching across runs.`});
+    }
+  }
+  if(out.length < 4 && g.pre.length >= 2){
+    const preDelta = g.pre[g.pre.length-1].val - g.pre[0].val;
+    if(Math.abs(preDelta) <= (mmol ? 0.55 : 10) && g.pre[g.pre.length-1].val >= g.lo){
+      out.push({icon:'🎯', text:'A flat, in-range warm-up — arriving at the start line steady is half the battle.'});
+    }
+  }
+  return out.slice(0, 4);
+}
+
+function generateBadges(g, splits, start){
+  const mmol = glucoseUnit === 'mmol/L';
+  const b = [];
+  if(g.tir === 100 && g.during.length >= 3) b.push({t:'100% in range', c:'teal'});
+  if(g.swing < (mmol ? 1.4 : 25) && g.during.length >= 3) b.push({t:'flatline legend', c:'teal'});
+  if(g.minRow.val < g.lo && g.endVal >= g.lo) b.push({t:'comeback', c:'teal'});
+  const fullSplits = splits.filter(s => s.distance >= MI*0.95);
+  if(fullSplits.length >= 4){
+    const half = Math.floor(fullSplits.length/2);
+    const avgSp = arr => arr.reduce((s,x) => s + x.average_speed, 0)/arr.length;
+    if(MI/avgSp(fullSplits.slice(0, half)) - MI/avgSp(fullSplits.slice(-half)) > 5) b.push({t:'negative split', c:'orange'});
+  }
+  const h = start.getHours();
+  if(h < 7) b.push({t:'sunrise run', c:'orange'});
+  else if(h >= 21) b.push({t:'night owl', c:'orange'});
+  return b.slice(0, 3);
 }
 
 // ---------- narrative ----------
@@ -698,7 +850,8 @@ function generateBlurb(g, distMi, pace, trendWord){
   const swingNote = g.swing < (glucoseUnit==='mmol/L'?1.7:30) ? 'nice and stable the whole way'
     : g.swing < (glucoseUnit==='mmol/L'?3.3:60) ? 'with some natural movement'
     : 'swinging around a fair bit';
-  const emoji = g.delta > 15 ? '📈' : g.delta < -15 ? '📉' : '➡️';
+  const th = glucoseUnit === 'mmol/L' ? 0.83 : 15;
+  const emoji = g.delta > th ? '📈' : g.delta < -th ? '📉' : '➡️';
   return `${emoji} Over ${distMi.toFixed(1)} miles at ${pace}, glucose averaged ${fmtG(g.avg)} ${glucoseUnit} and ${trendWord} from start to finish, ${swingNote} — ${g.tir}% of the run in range.`;
 }
 
@@ -883,6 +1036,7 @@ function buildSplits(splits){
       <div class="split-mi">${label}</div>
       <div class="split-track"><div class="split-bar" style="width:${pct.toFixed(1)}%"></div></div>
       <div class="split-pace">${fmtPace(s.average_speed).replace('/mi','')}${i === fastest ? '<span class="split-tag">fastest</span>' : ''}</div>
+      <div class="split-g">${s._g != null ? fmtG(s._g) : '—'}</div>
     </div>`;
   }).join('');
 }
@@ -892,7 +1046,7 @@ function buildTableView(g, splits, start, end){
   const gRows = g.win.map(r =>
     `<tr><td>${fmtClock(r.t)}</td><td>${fmtG(r.val)}</td><td>${r.t < start ? 'before' : r.t > end ? 'after' : 'run'}</td></tr>`).join('');
   const sRows = splits.map((s,i) =>
-    `<tr><td>${i+1}</td><td>${fmtPace(s.average_speed)}</td><td>${s.elevation_difference != null ? Math.round(s.elevation_difference*3.281) + ' ft' : '—'}</td><td>${s.average_heartrate ? Math.round(s.average_heartrate) + ' bpm' : '—'}</td></tr>`).join('');
+    `<tr><td>${i+1}</td><td>${fmtPace(s.average_speed)}</td><td>${s._g != null ? fmtG(s._g) : '—'}</td><td>${s.elevation_difference != null ? Math.round(s.elevation_difference*3.281) + ' ft' : '—'}</td><td>${s.average_heartrate ? Math.round(s.average_heartrate) + ' bpm' : '—'}</td></tr>`).join('');
   return `
   <details class="tableview">
     <summary>View the data as a table</summary>
@@ -907,7 +1061,7 @@ function buildTableView(g, splits, start, end){
     <div class="tbl-scroll">
       <table class="data">
         <caption>Mile splits</caption>
-        <thead><tr><th>Mile</th><th>Pace</th><th>Elev Δ</th><th>HR</th></tr></thead>
+        <thead><tr><th>Mile</th><th>Pace</th><th>Avg glucose</th><th>Elev Δ</th><th>HR</th></tr></thead>
         <tbody>${sRows}</tbody>
       </table>
     </div>` : ''}
