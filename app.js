@@ -3,6 +3,7 @@ let activities = [];
 let selectedActivity = null;
 let glucoseRows = null; // [{t: Date, val: number}]
 let glucoseUnit = 'mg/dL';
+let lastReport = null; // set by buildReport; used by the share-image export
 
 const $ = (id) => document.getElementById(id);
 const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
@@ -454,10 +455,16 @@ function buildReport(a){
         <button class="copy-btn" id="copy-caption">Copy</button>
       </div>
 
+      <div class="row" style="margin-top:12px;">
+        <button class="btn-strava" id="btn-share-img">Download share image</button>
+        <span class="share-hint">1080×1350 — sized for a Strava activity photo; the caption above makes a nice description.</span>
+      </div>
+
       ${buildTableView(g, splits, start, end)}
     </div>
   `;
 
+  lastReport = {a, g, start, end, dateStr, distMi, pace, caption};
   attachChartInteraction(g, start, end);
 
   $('copy-caption').addEventListener('click', () => {
@@ -465,6 +472,180 @@ function buildReport(a){
     $('copy-caption').textContent = 'Copied!';
     setTimeout(()=> $('copy-caption').textContent = 'Copy', 1500);
   });
+
+  $('btn-share-img').addEventListener('click', downloadShareImage);
+}
+
+// ---------- share image (1080x1350 canvas, Strava photo ratio) ----------
+function wrapLines(ctx, text, maxW, maxLines){
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = '';
+  for(const w of words){
+    const test = line ? line + ' ' + w : w;
+    if(ctx.measureText(test).width > maxW && line){
+      lines.push(line);
+      line = w;
+      if(lines.length === maxLines){ line = ''; lines[maxLines-1] += '…'; break; }
+    } else {
+      line = test;
+    }
+  }
+  if(line && lines.length < maxLines) lines.push(line);
+  return lines;
+}
+
+function renderShareCanvas(){
+  const {a, g, start, end, dateStr, distMi, pace, caption} = lastReport;
+  const W = 1080, H = 1350, P = 84;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+
+  const bg = x.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#171d27'); bg.addColorStop(1, '#10141b');
+  x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  const acc = x.createLinearGradient(0, 0, W, 0);
+  acc.addColorStop(0, '#45e0c4'); acc.addColorStop(1, '#ff5a2e');
+  x.fillStyle = acc; x.fillRect(0, 0, W, 10);
+
+  let y = 128;
+  x.fillStyle = '#45e0c4';
+  x.font = '600 25px "JetBrains Mono", monospace';
+  x.fillText('S P L I T S  &  S U G A R', P, y);
+
+  x.fillStyle = '#f2f0ea';
+  x.font = '700 66px Oswald, sans-serif';
+  const titleLines = wrapLines(x, a.name, W - 2*P, 2);
+  y += 84;
+  titleLines.forEach(l => { x.fillText(l, P, y); y += 76; });
+
+  x.fillStyle = '#9aa4b4';
+  x.font = '400 27px "JetBrains Mono", monospace';
+  x.fillText(dateStr + '  ·  ' + fmtClock(start) + ' – ' + fmtClock(end), P, y);
+  y += 66;
+
+  // stats: two rows of three
+  const stats = [
+    ['DISTANCE', distMi.toFixed(2), ' mi', '#ff5a2e'],
+    ['AVG PACE', pace.replace('/mi',''), ' /mi', '#ff5a2e'],
+    ['TIME', fmtDur(a.moving_time || a.elapsed_time), '', '#ff5a2e'],
+    ['AVG GLUCOSE', fmtG(g.avg), ' ' + glucoseUnit, '#45e0c4'],
+    ['IN RANGE', String(g.tir), ' %', '#45e0c4'],
+    ['START → FINISH', (g.delta > 0 ? '+' : '') + fmtG(g.delta), ' ' + glucoseUnit, '#45e0c4']
+  ];
+  const colW = (W - 2*P) / 3, rowH = 148;
+  stats.forEach(([label, val, unit, color], i) => {
+    const sx = P + (i % 3) * colW, sy = y + Math.floor(i / 3) * rowH;
+    x.fillStyle = color; x.fillRect(sx, sy - 16, 16, 16);
+    x.fillStyle = '#6b7686';
+    x.font = '500 21px "JetBrains Mono", monospace';
+    x.fillText(label, sx + 26, sy);
+    x.fillStyle = '#f2f0ea';
+    x.font = '700 54px Inter, sans-serif';
+    x.fillText(val, sx, sy + 62);
+    const vw = x.measureText(val).width;
+    if(unit){
+      x.fillStyle = '#9aa4b4';
+      x.font = '500 26px Inter, sans-serif';
+      x.fillText(unit, sx + vw + 6, sy + 62);
+    }
+  });
+  y += 2 * rowH + 30;
+
+  // chart
+  const cy0 = y + 36, cy1 = cy0 + 330, cx0 = P, cx1 = W - P;
+  x.fillStyle = '#6b7686';
+  x.font = '500 22px "JetBrains Mono", monospace';
+  x.fillText('GLUCOSE · ' + glucoseUnit.toUpperCase(), cx0, y);
+  const tgt = 'TARGET ' + fmtG(g.lo) + '–' + fmtG(g.hi);
+  x.fillText(tgt, cx1 - x.measureText(tgt).width, y);
+
+  const rows = g.win;
+  const t0 = rows[0].t.getTime(), t1 = rows[rows.length-1].t.getTime();
+  const span = Math.max(t1 - t0, 1);
+  const vPad = glucoseUnit === 'mmol/L' ? 0.8 : 12;
+  const vMin = Math.min(...rows.map(r=>r.val)) - vPad;
+  const vMax = Math.max(...rows.map(r=>r.val)) + vPad;
+  const cxOf = t => cx0 + (t - t0)/span * (cx1 - cx0);
+  const cyOf = v => cy1 - (v - vMin)/(vMax - vMin) * (cy1 - cy0);
+
+  // run window band
+  const rx0 = Math.max(cxOf(start.getTime()), cx0), rx1 = Math.min(cxOf(end.getTime()), cx1);
+  x.fillStyle = 'rgba(217,69,24,0.12)';
+  x.fillRect(rx0, cy0, Math.max(rx1 - rx0, 2), cy1 - cy0);
+  x.strokeStyle = 'rgba(255,90,46,0.8)'; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(rx0, cy0); x.lineTo(rx0, cy1); x.moveTo(rx1, cy0); x.lineTo(rx1, cy1); x.stroke();
+  x.fillStyle = '#9aa4b4';
+  x.font = '500 22px "JetBrains Mono", monospace';
+  x.fillText('start', rx0 + 10, cy0 + 30);
+  x.fillText('finish', rx1 - x.measureText('finish').width - 10, cy0 + 30);
+
+  // target range lines
+  x.strokeStyle = '#6b7686'; x.lineWidth = 2; x.setLineDash([8, 8]);
+  [g.lo, g.hi].forEach(v => {
+    if(v > vMin && v < vMax){
+      const ly = cyOf(v);
+      x.beginPath(); x.moveTo(cx0, ly); x.lineTo(cx1, ly); x.stroke();
+    }
+  });
+  x.setLineDash([]);
+
+  // area + line
+  x.beginPath();
+  rows.forEach((r, i) => { const px = cxOf(r.t.getTime()), py = cyOf(r.val); i === 0 ? x.moveTo(px, py) : x.lineTo(px, py); });
+  x.lineTo(cxOf(t1), cy1); x.lineTo(cxOf(t0), cy1); x.closePath();
+  x.fillStyle = 'rgba(29,168,143,0.12)'; x.fill();
+  x.beginPath();
+  rows.forEach((r, i) => { const px = cxOf(r.t.getTime()), py = cyOf(r.val); i === 0 ? x.moveTo(px, py) : x.lineTo(px, py); });
+  x.strokeStyle = '#1da88f'; x.lineWidth = 5; x.lineJoin = 'round'; x.lineCap = 'round'; x.stroke();
+
+  // low point
+  const lx = cxOf(g.minRow.t.getTime()), lyv = cyOf(g.minRow.val);
+  x.fillStyle = '#10141b'; x.beginPath(); x.arc(lx, lyv, 12, 0, Math.PI*2); x.fill();
+  x.fillStyle = '#1da88f'; x.beginPath(); x.arc(lx, lyv, 8, 0, Math.PI*2); x.fill();
+  x.fillStyle = '#9aa4b4';
+  x.font = '500 24px "JetBrains Mono", monospace';
+  const lowLabel = 'low ' + fmtG(g.minRow.val);
+  const labelAbove = lyv > cy1 - 44;
+  x.fillText(lowLabel, Math.min(Math.max(lx - x.measureText(lowLabel).width/2, cx0), cx1 - x.measureText(lowLabel).width), labelAbove ? lyv - 24 : lyv + 44);
+
+  // caption
+  let capY = cy1 + 88;
+  x.fillStyle = '#f2f0ea';
+  x.font = 'italic 500 33px Inter, sans-serif';
+  wrapLines(x, '“' + caption + '”', W - 2*P, 3).forEach(l => { x.fillText(l, P, capY); capY += 48; });
+
+  // footer
+  x.fillStyle = '#6b7686';
+  x.font = '500 23px "JetBrains Mono", monospace';
+  x.textAlign = 'center';
+  const site = (location.host || 'splits & sugar') + location.pathname.replace(/[^/]*$/, '').replace(/\/$/, '');
+  x.fillText('built with <3 by AT  ·  ' + site, W/2, H - 52);
+  x.textAlign = 'left';
+
+  return c;
+}
+
+async function downloadShareImage(){
+  if(!lastReport) return;
+  const btn = $('btn-share-img');
+  btn.disabled = true; btn.textContent = 'Rendering…';
+  try{
+    await document.fonts.ready;
+    const canvas = renderShareCanvas();
+    await new Promise(resolve => canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const aEl = document.createElement('a');
+      aEl.href = url;
+      aEl.download = 'splits-and-sugar.png';
+      aEl.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      resolve();
+    }, 'image/png'));
+  }finally{
+    btn.disabled = false; btn.textContent = 'Download share image';
+  }
 }
 
 // ---------- narrative ----------
@@ -526,7 +707,9 @@ function generateCaption(g, distMi, pace, trendWord){
     `${distMi.toFixed(1)} miles at ${pace}, ${g.tir}% in range — running on more than just willpower today.`,
     `Legs at ${pace}, sugar ${trendWord} — a solid team effort out there.`,
     `${distMi.toFixed(1)} miles down, glucose ${fmtG(g.startVal)} → ${fmtG(g.endVal)} — the numbers behaved today.`,
-    `Pancreas on manual mode, ${distMi.toFixed(1)} miles anyway. ${g.tir}% in range.`
+    `Pancreas on manual mode, ${distMi.toFixed(1)} miles anyway. ${g.tir}% in range.`,
+    `Fueled, paced, and ${g.tir}% in range — call it a win.`,
+    `${pace} splits with a side of glucose graphs.`
   ];
   return templates[Math.floor(Math.random()*templates.length)];
 }

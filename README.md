@@ -26,4 +26,3 @@ No build step. Open `index.html` in a browser, or serve it locally:
 python3 -m http.server
 ```
 
-Not a medical tool — just a fun way to see two data sets on one page.
