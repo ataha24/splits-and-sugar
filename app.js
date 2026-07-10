@@ -526,7 +526,7 @@ function roundedRectPath(ctx, rx, ry, rw, rh, rr){
 }
 
 function renderShareCanvas(){
-  const {a, g, start, end, dateStr, distMi, pace, caption, badges} = lastReport;
+  const {a, g, start, end, dateStr, distMi, pace, badges} = lastReport;
   const W = 1080, H = 1350, P = 84;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -602,8 +602,8 @@ function renderShareCanvas(){
   });
   y += 2 * rowH + 30;
 
-  // chart
-  const cy0 = y + 36, cy1 = cy0 + 330, cx0 = P, cx1 = W - P;
+  // chart — fills the rest of the canvas (no caption/footer below)
+  const cy0 = y + 36, cy1 = H - 96, cx0 = P, cx1 = W - P;
   x.fillStyle = '#6b7686';
   x.font = '500 22px "JetBrains Mono", monospace';
   x.fillText('GLUCOSE · ' + glucoseUnit.toUpperCase(), cx0, y);
@@ -658,21 +658,6 @@ function renderShareCanvas(){
   const lowLabel = 'low ' + fmtG(g.minRow.val);
   const labelAbove = lyv > cy1 - 44;
   x.fillText(lowLabel, Math.min(Math.max(lx - x.measureText(lowLabel).width/2, cx0), cx1 - x.measureText(lowLabel).width), labelAbove ? lyv - 24 : lyv + 44);
-
-  // caption (lines capped so a tall title + badges can't push past the footer)
-  let capY = cy1 + 84;
-  const maxCapLines = Math.max(1, Math.min(3, Math.floor((H - 130 - capY)/48) + 1));
-  x.fillStyle = '#f2f0ea';
-  x.font = 'italic 500 33px Inter, sans-serif';
-  wrapLines(x, '“' + caption + '”', W - 2*P, maxCapLines).forEach(l => { x.fillText(l, P, capY); capY += 48; });
-
-  // footer
-  x.fillStyle = '#6b7686';
-  x.font = '500 23px "JetBrains Mono", monospace';
-  x.textAlign = 'center';
-  const site = (location.host || 'splits & sugar') + location.pathname.replace(/[^/]*$/, '').replace(/\/$/, '');
-  x.fillText('built with <3 by AT  ·  ' + site, W/2, H - 52);
-  x.textAlign = 'left';
 
   return c;
 }
