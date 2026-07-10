@@ -192,6 +192,7 @@
   .stat-val{font-size:23px;font-weight:600;margin-top:5px;letter-spacing:-.01em;}
   .stat-val small{font-size:12px;font-weight:500;color:var(--text-dim);margin-left:2px;}
   .stat-sub{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+  .route-svg{width:100%;height:64px;margin-top:8px;display:block;}
   .stat-mark{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;}
 
   .section-title{

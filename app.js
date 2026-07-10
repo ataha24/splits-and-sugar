@@ -282,6 +282,12 @@ function loadDemoData(){
       average_heartrate: [148, 154, 161, 165, 159][i]
     }))
   };
+  // demo route: a heart, obviously
+  const heartPts = [];
+  for(let t = 0; t <= Math.PI*2 + 0.01; t += Math.PI/48){
+    heartPts.push([16*Math.pow(Math.sin(t), 3), -(13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t))]);
+  }
+  selectedActivity._demoRoute = normalizeRoute(heartPts);
 
   // synthetic glucose curve: gentle pre-run rise, dip mid-run, recovery after
   const rows = [];
@@ -413,6 +419,18 @@ function buildReport(a){
   const caption = generateCaption(g, distMi, pace, trendWord);
   const insights = generateInsights(g, splits, start, end);
   const badges = generateBadges(g, splits, start);
+  const route = routePoints(a);
+  const routeTile = route ? `
+    <div class="stat">
+      <div class="stat-label"><span class="stat-mark" style="background:var(--strava-ink)"></span>Route</div>
+      <svg class="route-svg" viewBox="0 0 100 64" aria-hidden="true">
+        <defs><linearGradient id="route-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#45e0c4"/><stop offset="1" stop-color="#ff5a2e"/>
+        </linearGradient></defs>
+        <polyline points="${routeFitPoints(route, 100, 64, 5).map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"
+          fill="none" stroke="url(#route-grad)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>` : '';
 
   const statTiles = [
     {label:'Distance', val: distMi.toFixed(2), unit:' mi', color:'var(--strava-ink)'},
@@ -440,6 +458,7 @@ function buildReport(a){
             <div class="stat-val">${t.val}<small>${t.unit}</small></div>
             ${t.sub ? `<div class="stat-sub">${t.sub}</div>` : ''}
           </div>`).join('')}
+        ${routeTile}
       </div>
 
       <div class="section-title">Glucose · ${glucoseUnit}</div>
@@ -484,8 +503,37 @@ function buildReport(a){
     </div>
   `;
 
-  lastReport = {a, g, start, end, dateStr, distMi, pace, caption, badges};
+  lastReport = {a, g, start, end, dateStr, distMi, pace, caption, badges, splits, route};
   attachChartInteraction(g, start, end);
+
+  // the glucose line draws itself in
+  const gline = $('gline');
+  if(gline && matchMedia('(prefers-reduced-motion: no-preference)').matches){
+    const len = gline.getTotalLength();
+    gline.animate(
+      [{strokeDasharray: len, strokeDashoffset: len}, {strokeDasharray: len, strokeDashoffset: 0}],
+      {duration: 1400, easing: 'ease-out'}
+    );
+  }
+
+  // hovering a mile split highlights that mile's window on the glucose chart
+  document.querySelectorAll('.split-row').forEach((row, i) => {
+    const s = splits[i];
+    if(!s || !s._t0) return;
+    row.addEventListener('mouseenter', () => {
+      const hl = $('split-hl');
+      if(!hl) return;
+      const hx0 = Math.max(chartGeom.xOf(s._t0), CH.padL);
+      const hx1 = Math.min(chartGeom.xOf(s._t1), CH.W - CH.padR);
+      hl.setAttribute('x', hx0.toFixed(1));
+      hl.setAttribute('width', Math.max(hx1 - hx0, 2).toFixed(1));
+      hl.setAttribute('opacity', '0.18');
+    });
+    row.addEventListener('mouseleave', () => {
+      const hl = $('split-hl');
+      if(hl) hl.setAttribute('opacity', '0');
+    });
+  });
 
   $('copy-caption').addEventListener('click', () => {
     navigator.clipboard.writeText(caption);
@@ -526,7 +574,7 @@ function roundedRectPath(ctx, rx, ry, rw, rh, rr){
 }
 
 function renderShareCanvas(){
-  const {a, g, start, end, dateStr, distMi, pace, badges} = lastReport;
+  const {a, g, start, end, dateStr, distMi, pace, badges, splits, route} = lastReport;
   const W = 1080, H = 1350, P = 84;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -539,6 +587,20 @@ function renderShareCanvas(){
   acc.addColorStop(0, '#45e0c4'); acc.addColorStop(1, '#ff5a2e');
   x.fillStyle = acc; x.fillRect(0, 0, W, 10);
 
+  // route silhouette, glowing, top-right (title wraps around it)
+  if(route){
+    const box = 250, rxb = W - P - box, ryb = 110;
+    const pts = routeFitPoints(route, box, box, 14).map(([px, py]) => [rxb + px, ryb + py]);
+    const rg = x.createLinearGradient(rxb, ryb, rxb + box, ryb + box);
+    rg.addColorStop(0, '#45e0c4'); rg.addColorStop(1, '#ff5a2e');
+    x.strokeStyle = rg; x.lineWidth = 5; x.lineJoin = 'round'; x.lineCap = 'round';
+    x.shadowColor = 'rgba(69,224,196,.55)'; x.shadowBlur = 22;
+    x.beginPath();
+    pts.forEach(([px, py], i) => i === 0 ? x.moveTo(px, py) : x.lineTo(px, py));
+    x.stroke();
+    x.shadowBlur = 0;
+  }
+
   let y = 128;
   x.fillStyle = '#45e0c4';
   x.font = '600 25px "JetBrains Mono", monospace';
@@ -546,7 +608,8 @@ function renderShareCanvas(){
 
   x.fillStyle = '#f2f0ea';
   x.font = '700 66px Oswald, sans-serif';
-  const titleLines = wrapLines(x, a.name, W - 2*P, 2);
+  const titleMaxW = route ? W - 2*P - 290 : W - 2*P;
+  const titleLines = wrapLines(x, a.name, titleMaxW, 2);
   y += 84;
   titleLines.forEach(l => { x.fillText(l, P, y); y += 76; });
 
@@ -590,6 +653,22 @@ function renderShareCanvas(){
     x.fillStyle = '#6b7686';
     x.font = '500 21px "JetBrains Mono", monospace';
     x.fillText(label, sx + 26, sy);
+    if(label === 'IN RANGE'){
+      // ring gauge instead of a plain number
+      const rcx = sx + 56, rcy = sy + 62, rr = 44;
+      x.strokeStyle = 'rgba(29,168,143,.22)'; x.lineWidth = 11;
+      x.beginPath(); x.arc(rcx, rcy, rr, 0, Math.PI*2); x.stroke();
+      x.strokeStyle = '#45e0c4'; x.lineCap = 'round';
+      x.shadowColor = 'rgba(69,224,196,.6)'; x.shadowBlur = 12;
+      x.beginPath(); x.arc(rcx, rcy, rr, -Math.PI/2, -Math.PI/2 + Math.PI*2*(g.tir/100));
+      x.stroke();
+      x.shadowBlur = 0;
+      x.fillStyle = '#f2f0ea';
+      x.font = '700 28px Inter, sans-serif';
+      const pt = g.tir + '%';
+      x.fillText(pt, rcx - x.measureText(pt).width/2, rcy + 10);
+      return;
+    }
     x.fillStyle = '#f2f0ea';
     x.font = '700 54px Inter, sans-serif';
     x.fillText(val, sx, sy + 62);
@@ -602,8 +681,9 @@ function renderShareCanvas(){
   });
   y += 2 * rowH + 30;
 
-  // chart — fills the rest of the canvas (no caption/footer below)
-  const cy0 = y + 36, cy1 = H - 96, cx0 = P, cx1 = W - P;
+  // chart — fills the canvas down to the splits strip (or the bottom margin)
+  const stripSplits = splits && splits.length >= 2 && splits.length <= 14 ? splits : null;
+  const cy0 = y + 36, cy1 = stripSplits ? H - 224 : H - 96, cx0 = P, cx1 = W - P;
   x.fillStyle = '#6b7686';
   x.font = '500 22px "JetBrains Mono", monospace';
   x.fillText('GLUCOSE · ' + glucoseUnit.toUpperCase(), cx0, y);
@@ -640,24 +720,56 @@ function renderShareCanvas(){
   });
   x.setLineDash([]);
 
-  // area + line
+  // area (fades downward) + neon line
+  const areaGrad = x.createLinearGradient(0, cy0, 0, cy1);
+  areaGrad.addColorStop(0, 'rgba(69,224,196,.28)');
+  areaGrad.addColorStop(1, 'rgba(69,224,196,0)');
   x.beginPath();
   rows.forEach((r, i) => { const px = cxOf(r.t.getTime()), py = cyOf(r.val); i === 0 ? x.moveTo(px, py) : x.lineTo(px, py); });
   x.lineTo(cxOf(t1), cy1); x.lineTo(cxOf(t0), cy1); x.closePath();
-  x.fillStyle = 'rgba(29,168,143,0.12)'; x.fill();
+  x.fillStyle = areaGrad; x.fill();
   x.beginPath();
   rows.forEach((r, i) => { const px = cxOf(r.t.getTime()), py = cyOf(r.val); i === 0 ? x.moveTo(px, py) : x.lineTo(px, py); });
-  x.strokeStyle = '#1da88f'; x.lineWidth = 5; x.lineJoin = 'round'; x.lineCap = 'round'; x.stroke();
+  x.strokeStyle = '#45e0c4'; x.lineWidth = 5; x.lineJoin = 'round'; x.lineCap = 'round';
+  x.shadowColor = 'rgba(69,224,196,.75)'; x.shadowBlur = 18;
+  x.stroke();
+  x.shadowBlur = 0;
 
   // low point
   const lx = cxOf(g.minRow.t.getTime()), lyv = cyOf(g.minRow.val);
   x.fillStyle = '#10141b'; x.beginPath(); x.arc(lx, lyv, 12, 0, Math.PI*2); x.fill();
-  x.fillStyle = '#1da88f'; x.beginPath(); x.arc(lx, lyv, 8, 0, Math.PI*2); x.fill();
+  x.fillStyle = '#45e0c4';
+  x.shadowColor = 'rgba(69,224,196,.9)'; x.shadowBlur = 14;
+  x.beginPath(); x.arc(lx, lyv, 8, 0, Math.PI*2); x.fill();
+  x.shadowBlur = 0;
   x.fillStyle = '#9aa4b4';
   x.font = '500 24px "JetBrains Mono", monospace';
   const lowLabel = 'low ' + fmtG(g.minRow.val);
   const labelAbove = lyv > cy1 - 44;
   x.fillText(lowLabel, Math.min(Math.max(lx - x.measureText(lowLabel).width/2, cx0), cx1 - x.measureText(lowLabel).width), labelAbove ? lyv - 24 : lyv + 44);
+
+  // mile-splits strip along the bottom, fastest mile lit up
+  if(stripSplits){
+    const n = stripSplits.length;
+    const gap = 8, segW = (cx1 - cx0 - gap*(n-1))/n, segY = H - 152;
+    const maxSp = Math.max(...stripSplits.map(s => s.average_speed));
+    x.fillStyle = '#6b7686';
+    x.font = '500 22px "JetBrains Mono", monospace';
+    x.fillText('MILE SPLITS', cx0, segY - 24);
+    stripSplits.forEach((s, i) => {
+      const sx = cx0 + i*(segW + gap);
+      const fastest = s.average_speed === maxSp;
+      if(fastest){ x.shadowColor = 'rgba(255,90,46,.8)'; x.shadowBlur = 16; }
+      x.fillStyle = fastest ? '#ff5a2e' : 'rgba(217,69,24,.4)';
+      roundedRectPath(x, sx, segY, segW, 16, 8);
+      x.fill();
+      x.shadowBlur = 0;
+      x.fillStyle = fastest ? '#f2f0ea' : '#9aa4b4';
+      x.font = (fastest ? '600' : '500') + ' 23px "JetBrains Mono", monospace';
+      const pl = fmtPace(s.average_speed).replace('/mi','');
+      x.fillText(pl, sx + segW/2 - x.measureText(pl).width/2, segY + 52);
+    });
+  }
 
   return c;
 }
@@ -681,6 +793,55 @@ async function downloadShareImage(){
   }finally{
     btn.disabled = false; btn.textContent = 'Download share image';
   }
+}
+
+// ---------- route silhouette ----------
+// Standard encoded-polyline decoder (Strava's map.summary_polyline).
+function decodePolyline(str){
+  let idx = 0, lat = 0, lng = 0;
+  const pts = [];
+  while(idx < str.length){
+    for(const which of [0, 1]){
+      let shift = 0, result = 0, b;
+      do{
+        b = str.charCodeAt(idx++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      }while(b >= 0x20);
+      const d = (result & 1) ? ~(result >> 1) : (result >> 1);
+      if(which === 0) lat += d; else lng += d;
+    }
+    pts.push([lat * 1e-5, lng * 1e-5]);
+  }
+  return pts;
+}
+
+// shift to origin and scale so the largest dimension is 1 (aspect preserved)
+function normalizeRoute(pts){
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const x0 = Math.min(...xs), y0 = Math.min(...ys);
+  const w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
+  const s = 1 / Math.max(w, h, 1e-9);
+  return {pts: pts.map(p => [(p[0]-x0)*s, (p[1]-y0)*s]), w: w*s, h: h*s};
+}
+
+function routePoints(a){
+  if(a._demoRoute) return a._demoRoute;
+  const enc = a.map && (a.map.summary_polyline || a.map.polyline);
+  if(!enc) return null;
+  const ll = decodePolyline(enc);
+  if(ll.length < 2) return null;
+  // equirectangular projection: x = lng·cos(midLat), y = −lat (screen y grows down)
+  const midLat = (ll.reduce((s,p) => s + p[0], 0)/ll.length) * Math.PI/180;
+  return normalizeRoute(ll.map(([la, ln]) => [ln * Math.cos(midLat), -la]));
+}
+
+// fit the normalized route into a w×h box (centered), return "x,y x,y …"
+function routeFitPoints(route, w, h, pad){
+  const availW = w - 2*pad, availH = h - 2*pad;
+  const s = Math.min(availW/route.w, availH/route.h);
+  const ox = pad + (availW - route.w*s)/2, oy = pad + (availH - route.h*s)/2;
+  return route.pts.map(([px, py]) => [ox + px*s, oy + py*s]);
 }
 
 // ---------- time-in-range bar ----------
@@ -937,8 +1098,9 @@ function buildGlucoseChart(g, start, end){
       <text x="${(runX0+5).toFixed(1)}" y="${padT+12}" fill="#9aa4b4" font-size="10" font-family="JetBrains Mono, monospace">start</text>
       <text x="${(runX1-5).toFixed(1)}" y="${padT+12}" fill="#9aa4b4" font-size="10" text-anchor="end" font-family="JetBrains Mono, monospace">finish</text>
       ${target}
+      <rect id="split-hl" y="${padT}" height="${H-padT-padB}" x="0" width="0" fill="#ff5a2e" opacity="0" style="transition:opacity .2s ease" pointer-events="none"/>
       <path d="${area}" fill="#1da88f" opacity="0.09"/>
-      <path d="${path}" fill="none" stroke="#1da88f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <path id="gline" d="${path}" fill="none" stroke="#1da88f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       ${lowMark}
       ${yLabels}
       ${xLabels}
