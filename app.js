@@ -683,7 +683,7 @@ function renderShareCanvas(){
 
   // chart — fills the canvas down to the splits strip (or the bottom margin)
   const stripSplits = splits && splits.length >= 2 && splits.length <= 14 ? splits : null;
-  const cy0 = y + 36, cy1 = stripSplits ? H - 224 : H - 96, cx0 = P, cx1 = W - P;
+  const cy0 = y + 36, cy1 = stripSplits ? H - 264 : H - 96, cx0 = P, cx1 = W - P;
   x.fillStyle = '#6b7686';
   x.font = '500 22px "JetBrains Mono", monospace';
   x.fillText('GLUCOSE · ' + glucoseUnit.toUpperCase(), cx0, y);
@@ -748,14 +748,16 @@ function renderShareCanvas(){
   const labelAbove = lyv > cy1 - 44;
   x.fillText(lowLabel, Math.min(Math.max(lx - x.measureText(lowLabel).width/2, cx0), cx1 - x.measureText(lowLabel).width), labelAbove ? lyv - 24 : lyv + 44);
 
-  // mile-splits strip along the bottom, fastest mile lit up
+  // mile-splits strip along the bottom: pace + avg glucose per mile, fastest lit up
   if(stripSplits){
     const n = stripSplits.length;
-    const gap = 8, segW = (cx1 - cx0 - gap*(n-1))/n, segY = H - 152;
+    const gap = 8, segW = (cx1 - cx0 - gap*(n-1))/n, segY = H - 192;
     const maxSp = Math.max(...stripSplits.map(s => s.average_speed));
     x.fillStyle = '#6b7686';
     x.font = '500 22px "JetBrains Mono", monospace';
     x.fillText('MILE SPLITS', cx0, segY - 24);
+    const key = 'PACE · AVG GLUCOSE (' + glucoseUnit.toUpperCase() + ')';
+    x.fillText(key, cx1 - x.measureText(key).width, segY - 24);
     stripSplits.forEach((s, i) => {
       const sx = cx0 + i*(segW + gap);
       const fastest = s.average_speed === maxSp;
@@ -767,7 +769,11 @@ function renderShareCanvas(){
       x.fillStyle = fastest ? '#f2f0ea' : '#9aa4b4';
       x.font = (fastest ? '600' : '500') + ' 23px "JetBrains Mono", monospace';
       const pl = fmtPace(s.average_speed).replace('/mi','');
-      x.fillText(pl, sx + segW/2 - x.measureText(pl).width/2, segY + 52);
+      x.fillText(pl, sx + segW/2 - x.measureText(pl).width/2, segY + 50);
+      x.fillStyle = '#45e0c4';
+      x.font = '500 23px "JetBrains Mono", monospace';
+      const gl = s._g != null ? fmtG(s._g) : '—';
+      x.fillText(gl, sx + segW/2 - x.measureText(gl).width/2, segY + 86);
     });
   }
 
