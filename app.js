@@ -213,28 +213,53 @@ on('csv-input', 'change', (e) => {
 
 function parseDexcomCSV(text){
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  // Clarity localizes headers to the account language ("Zeitstempel",
+  // "Glukosewert"...), but the unit string (mg/dL / mmol/L) is not translated —
+  // so accept a header row by English names OR by the unit string.
   let headerIdx = -1, headers = [];
   for(let i=0;i<lines.length;i++){
-    if(lines[i].toLowerCase().includes('glucose value') && lines[i].toLowerCase().includes('timestamp')){
+    const lower = lines[i].toLowerCase();
+    if((lower.includes('glucose value') && lower.includes('timestamp')) || lower.includes('mg/dl') || lower.includes('mmol/l')){
       headerIdx = i;
-      headers = splitCsvLine(lines[i]);
+      headers = splitCsvLine(lines[i]).map(h => h.toLowerCase());
       break;
     }
   }
-  if(headerIdx === -1) throw new Error('no header row with Timestamp / Glucose Value found');
+  if(headerIdx === -1) throw new Error('no header row with Timestamp / Glucose Value found — is this the Clarity CSV export?');
 
-  const tsCol = headers.findIndex(h => h.toLowerCase().includes('timestamp'));
-  const valColIdx = headers.findIndex(h => h.toLowerCase().includes('glucose value'));
-  const unit = headers[valColIdx].toLowerCase().includes('mmol') ? 'mmol/L' : 'mg/dL';
+  // column order is locale-stable, so the first unit-bearing column is the
+  // glucose value even when the fallback also matches "Rate of Change (mg/dL/min)"
+  let valColIdx = headers.findIndex(h => h.includes('glucose value'));
+  if(valColIdx === -1) valColIdx = headers.findIndex(h => h.includes('mg/dl') || h.includes('mmol'));
+  const unit = headers[valColIdx].includes('mmol') ? 'mmol/L' : 'mg/dL';
+  const evCol = headers.findIndex(h => h.includes('event type'));
+
+  let tsCol = headers.findIndex(h => h.includes('timestamp'));
+  if(tsCol === -1){
+    // localized header: find the column whose data looks like an ISO timestamp
+    const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+    for(let i = headerIdx+1; i < Math.min(headerIdx+40, lines.length) && tsCol === -1; i++){
+      const cols = splitCsvLine(lines[i]);
+      tsCol = cols.findIndex(cell => isoRe.test(cell.trim()));
+    }
+  }
+  if(tsCol === -1) throw new Error('couldn\'t find a timestamp column in that CSV');
+
+  // Dexcom sensors clamp to 40–400 mg/dL (2.2–22.2 mmol/L); out-of-range
+  // readings export as the words "Low"/"High"
+  const sensorFloor = unit === 'mmol/L' ? 2.2 : 40;
+  const sensorCeil = unit === 'mmol/L' ? 22.2 : 400;
 
   const rows = [];
   for(let i=headerIdx+1;i<lines.length;i++){
     const cols = splitCsvLine(lines[i]);
     if(cols.length <= Math.max(tsCol,valColIdx)) continue;
+    if(evCol !== -1 && (cols[evCol]||'').trim().toLowerCase() === 'calibration') continue; // fingersticks, not sensor readings
     const rawVal = (cols[valColIdx]||'').trim();
     const rawTs = (cols[tsCol]||'').trim();
     if(!rawVal || !rawTs) continue;
-    const val = parseFloat(rawVal);
+    const lowerVal = rawVal.toLowerCase();
+    const val = lowerVal === 'low' ? sensorFloor : lowerVal === 'high' ? sensorCeil : parseFloat(rawVal);
     if(isNaN(val)) continue;
     const t = new Date(rawTs.replace(' ','T'));
     if(isNaN(t.getTime())) continue;
