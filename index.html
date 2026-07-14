@@ -32,11 +32,12 @@
           <li>Go to <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> (logged in as the runner) and create an app — any name and website work.</li>
           <li>Set <b>Authorization Callback Domain</b> to <code id="cb-domain">this site's domain</code>.</li>
           <li>Copy the <b>Client ID</b> and <b>Client Secret</b> into the boxes below.</li>
-          <li>Hit connect — Strava will ask you to approve read-only access, then send you straight back here. Nothing is stored; you stay connected only for this visit.</li>
+          <li>Hit connect — Strava will ask you to approve read-only access, then send you straight back here. With <b>Stay connected</b> ticked, this device reconnects automatically on future visits — the setup really is one-time.</li>
         </ol>
       </details>
       <input type="text" id="client-id" placeholder="Client ID" autocomplete="off" inputmode="numeric">
       <input type="password" id="client-secret" placeholder="Client Secret" autocomplete="off">
+      <label class="remember"><input type="checkbox" id="remember-device" checked> Stay connected on this device</label>
       <div class="row" style="margin-top:8px;">
         <button class="btn-strava" id="btn-oauth">Connect with Strava</button>
       </div>
@@ -70,7 +71,7 @@
       </details>
       <label class="file-drop" id="drop-zone">
         <input type="file" id="csv-input" accept=".csv">
-        <span id="drop-label">Click to choose the Dexcom Clarity CSV export</span>
+        <span id="drop-label">Drop the Dexcom Clarity CSV export here, or click to choose</span>
       </label>
       <div id="glucose-status"></div>
     </div>

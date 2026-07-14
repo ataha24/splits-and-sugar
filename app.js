@@ -69,7 +69,15 @@ async function loadActivities(token){
     throw new Error('No recent runs found on that account.');
   }
   stravaToken = token;
-  $('strava-status').innerHTML = '<div class="ok">Connected — pick the run below.</div>';
+  const forget = savedAuth()
+    ? '<div class="forget">Staying connected on this device — <a href="#" id="btn-forget">disconnect</a></div>'
+    : '';
+  $('strava-status').innerHTML = '<div class="ok">Connected — pick the run below.</div>' + forget;
+  on('btn-forget', 'click', (e) => {
+    e.preventDefault();
+    forgetDevice();
+    e.target.closest('.forget').textContent = 'Disconnected — this device won\'t reconnect automatically next visit.';
+  });
   renderActivityList();
   $('card-strava').classList.add('done');
   setStep(1,'complete');
@@ -80,6 +88,21 @@ async function loadActivities(token){
 // Client ID/secret survive the redirect in sessionStorage only, and are
 // removed the moment the page returns; the token itself lives in memory.
 const OAUTH_ID_KEY = 'ss_client_id', OAUTH_SECRET_KEY = 'ss_client_secret';
+const OAUTH_REMEMBER_KEY = 'ss_remember';
+const SAVED_AUTH_KEY = 'ss_saved_auth';
+
+// "Stay connected": with the user's opt-in, the app credentials and refresh
+// token are kept in localStorage so return visits reconnect without the
+// redirect (Strava access tokens only last ~6 hours; refresh tokens don't expire).
+function savedAuth(){
+  try{ return JSON.parse(localStorage.getItem(SAVED_AUTH_KEY)); }catch(_){ return null; }
+}
+function saveAuth(id, secret, refreshToken){
+  localStorage.setItem(SAVED_AUTH_KEY, JSON.stringify({client_id: id, client_secret: secret, refresh_token: refreshToken}));
+}
+function forgetDevice(){
+  localStorage.removeItem(SAVED_AUTH_KEY);
+}
 
 on('btn-oauth', 'click', () => {
   const id = $('client-id').value.trim();
@@ -90,6 +113,7 @@ on('btn-oauth', 'click', () => {
   }
   sessionStorage.setItem(OAUTH_ID_KEY, id);
   sessionStorage.setItem(OAUTH_SECRET_KEY, secret);
+  sessionStorage.setItem(OAUTH_REMEMBER_KEY, $('remember-device').checked ? '1' : '');
   location.href = 'https://www.strava.com/oauth/authorize'
     + '?client_id=' + encodeURIComponent(id)
     + '&redirect_uri=' + encodeURIComponent(location.origin + location.pathname)
@@ -105,11 +129,14 @@ async function handleOAuthReturn(){
   const statusEl = $('strava-status');
   const id = sessionStorage.getItem(OAUTH_ID_KEY);
   const secret = sessionStorage.getItem(OAUTH_SECRET_KEY);
+  const remember = sessionStorage.getItem(OAUTH_REMEMBER_KEY) === '1';
   sessionStorage.removeItem(OAUTH_ID_KEY);
   sessionStorage.removeItem(OAUTH_SECRET_KEY);
+  sessionStorage.removeItem(OAUTH_REMEMBER_KEY);
   history.replaceState(null, '', location.pathname); // scrub the code from the URL
   if(id) $('client-id').value = id;
   if(secret) $('client-secret').value = secret;
+  if($('remember-device')) $('remember-device').checked = remember;
 
   if(params.get('error')){
     statusEl.innerHTML = '<div class="error">Strava access was declined — hit connect again and tap Authorize.</div>';
@@ -132,12 +159,43 @@ async function handleOAuthReturn(){
     });
     if(!res.ok) throw new Error('Strava rejected the sign-in (' + res.status + ') — double-check the Client Secret and connect again.');
     const tok = await res.json();
+    if(remember && tok.refresh_token) saveAuth(id, secret, tok.refresh_token);
     await loadActivities(tok.access_token);
   }catch(err){
     statusEl.innerHTML = '<div class="error">' + esc(err.message) + '</div>';
   }
 }
-handleOAuthReturn();
+
+// Return visit with a saved connection: swap the refresh token for a fresh
+// access token — no redirect, no typing.
+async function reconnectSaved(){
+  if(!$('btn-oauth')) return;
+  const saved = savedAuth();
+  if(!saved) return;
+  $('client-id').value = saved.client_id;
+  $('client-secret').value = saved.client_secret;
+  const statusEl = $('strava-status');
+  statusEl.innerHTML = '<div class="ok">Reconnecting to Strava…</div>';
+  try{
+    const res = await fetch('https://www.strava.com/oauth/token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({client_id: saved.client_id, client_secret: saved.client_secret, refresh_token: saved.refresh_token, grant_type: 'refresh_token'})
+    });
+    if(!res.ok) throw new Error('The saved Strava connection didn\'t work anymore — hit Connect with Strava to sign in again.');
+    const tok = await res.json();
+    if(tok.refresh_token) saveAuth(saved.client_id, saved.client_secret, tok.refresh_token); // Strava rotates refresh tokens
+    await loadActivities(tok.access_token);
+  }catch(err){
+    statusEl.innerHTML = '<div class="error">' + esc(err.message) + '</div>';
+  }
+}
+
+(async function initStrava(){
+  const params = new URLSearchParams(location.search);
+  if(params.get('code') || params.get('error')) await handleOAuthReturn();
+  else await reconnectSaved();
+})();
 
 // show this site's domain in the setup instructions
 if($('cb-domain')) $('cb-domain').textContent = location.hostname || 'localhost';
@@ -187,8 +245,18 @@ function renderActivityList(){
 // ---------- STEP 2: Glucose CSV ----------
 on('drop-zone', 'click', () => $('csv-input').click());
 on('csv-input', 'change', (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
+  if(e.target.files[0]) handleCsvFile(e.target.files[0]);
+});
+const dropZone = $('drop-zone');
+if(dropZone){
+  ['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); }));
+  dropZone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) handleCsvFile(file);
+  });
+}
+function handleCsvFile(file){
   $('drop-label').textContent = file.name;
   const reader = new FileReader();
   reader.onload = (evt) => {
@@ -209,7 +277,7 @@ on('csv-input', 'change', (e) => {
     }
   };
   reader.readAsText(file);
-});
+}
 
 function parseDexcomCSV(text){
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);

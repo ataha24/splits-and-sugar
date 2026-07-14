@@ -149,10 +149,14 @@
     display:block;
     transition:border-color .15s ease, color .15s ease;
   }
-  .file-drop:hover{border-color:var(--glucose);color:var(--text);}
+  .file-drop:hover, .file-drop.dragover{border-color:var(--glucose);color:var(--text);}
   .file-drop input{display:none;}
   .error{color:var(--warn);font-size:13px;margin-top:8px;}
   .ok{color:var(--glucose);font-size:13px;margin-top:8px;}
+  label.remember{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:10px;cursor:pointer;}
+  label.remember input{accent-color:var(--glucose);}
+  .forget{color:var(--text-dim);font-size:12px;margin-top:4px;}
+  .forget a{color:var(--text-dim);}
 
   /* ---------- Report ---------- */
   .report{margin-top:30px;}
