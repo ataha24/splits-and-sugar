@@ -257,6 +257,27 @@ if(dropZone){
     if(file) handleCsvFile(file);
   });
 }
+// Paste support: rows copied from any spreadsheet (or a CSV opened in a text
+// editor) can be pasted anywhere on the page. Unparseable pastes are ignored
+// so ordinary copy-paste elsewhere on the page never nags.
+document.addEventListener('paste', (e) => {
+  if(!$('drop-zone')) return; // not on the main page
+  const tag = (e.target.tagName || '').toLowerCase();
+  if(tag === 'input' || tag === 'textarea') return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if(!text || !text.includes('\n')) return;
+  try{
+    const parsed = parseGlucoseCSV(text);
+    glucoseRows = parsed.rows;
+    glucoseUnit = parsed.unit;
+    $('drop-label').textContent = 'Pasted data';
+    $('glucose-status').innerHTML = '<div class="ok">Loaded ' + glucoseRows.length + ' glucose readings (' + glucoseUnit + ', pasted ' + parsed.source + ').</div>';
+    $('card-glucose').classList.add('done');
+    setStep(2,'complete');
+    checkReady();
+  }catch(_){ /* not glucose data — leave the page alone */ }
+});
+
 function handleCsvFile(file){
   $('drop-label').textContent = file.name;
   const reader = new FileReader();
@@ -469,12 +490,15 @@ function parseDexcomCSV(text){
     rows.push({t, val});
   }
   rows.sort((a,b) => a.t - b.t);
-  return {rows, unit, source: 'Dexcom Clarity'};
+  // a real Clarity export has an Event Type column; without it this is more
+  // likely the hand-filled template or another app using the same headers
+  return {rows, unit, source: evCol !== -1 ? 'Dexcom Clarity' : 'CSV'};
 }
 
 function splitCsvLine(line){
-  // simple CSV split good enough for Clarity exports (no embedded commas in relevant fields)
-  return line.split(',').map(s => s.replace(/^"|"$/g,''));
+  // simple split good enough for CGM exports (no embedded delimiters in
+  // relevant fields); tabs cover data pasted straight from a spreadsheet
+  return line.split(line.includes('\t') ? '\t' : ',').map(s => s.replace(/^"|"$/g,''));
 }
 
 function checkReady(){

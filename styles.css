@@ -189,6 +189,12 @@
   details.help a{color:var(--glucose);}
   details.help code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--strava);background:var(--bg-raise);padding:1px 5px;border-radius:5px;}
   .help-note{margin:10px 0 0;font-size:13.5px;color:var(--text-dim);line-height:1.65;}
+  .template-preview{
+    margin:10px 0 0;padding:12px 14px;
+    background:var(--bg-raise);border:1px solid var(--line);border-radius:10px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;color:var(--text-dim);
+    overflow-x:auto;
+  }
   input[type="text"], input[type="password"]{
     width:100%;
     background:var(--bg-raise);
