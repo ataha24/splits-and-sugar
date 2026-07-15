@@ -1,6 +1,6 @@
 # Splits & Sugar
 
-A single-page web app that combines a Strava run with Dexcom glucose data into one shareable report — pace, distance, and a glucose overlay chart showing how blood sugar moved before, during, and after the run.
+A single-page web app that combines a Strava activity — run, ride, walk, workout, anything — with CGM glucose data into one shareable report: pace or speed, distance, and a glucose overlay chart showing how blood sugar moved before, during, and after.
 
 **Live app:** https://splits-and-sugar.vercel.app
 

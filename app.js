@@ -48,6 +48,36 @@ function fmtG(v){
   return glucoseUnit === 'mmol/L' ? (Math.round(v*10)/10).toFixed(1) : String(Math.round(v));
 }
 
+// ---------- sport awareness ----------
+function prettyType(type){
+  return String(type || 'Activity').replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+function sportNoun(type){
+  const t = String(type || '');
+  if(t.includes('Run')) return 'run';
+  if(t.includes('Ride') || t === 'Handcycle' || t === 'Velomobile') return 'ride';
+  if(t === 'Walk') return 'walk';
+  if(t === 'Hike') return 'hike';
+  if(t.includes('Swim')) return 'swim';
+  if(t === 'Rowing' || t === 'VirtualRow' || t === 'Canoeing' || t === 'Kayaking') return 'row';
+  if(['WeightTraining','Workout','Crossfit','HighIntensityIntervalTraining','Yoga','Pilates','Elliptical','StairStepper'].includes(t)) return 'workout';
+  return 'activity';
+}
+const PACE_TYPES = ['Run','TrailRun','VirtualRun','Walk','Hike','Snowshoe'];
+// Headline movement metric: min/mi pace for foot sports, mph for anything
+// else that covers distance, nothing for stationary work.
+function mainMetric(a){
+  if(!a.distance || a.distance < 100 || !a.average_speed) return null;
+  if(PACE_TYPES.includes(a.type)) return {label:'Avg pace', val: fmtPace(a.average_speed).replace('/mi',''), unit:' /mi'};
+  return {label:'Avg speed', val: (a.average_speed*2.23694).toFixed(1), unit:' mph'};
+}
+function metricPhrase(a, metric){
+  const distMi = a.distance/MI;
+  if(metric && metric.label === 'Avg pace') return distMi.toFixed(1) + ' miles at ' + fmtPace(a.average_speed);
+  if(metric) return distMi.toFixed(1) + ' miles at ' + metric.val + ' mph';
+  return fmtDur(a.moving_time || a.elapsed_time) + ' of work';
+}
+
 // ---------- STEP 1: Strava ----------
 async function loadActivities(token){
   const res = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=20', {
@@ -64,15 +94,15 @@ async function loadActivities(token){
       : 'Strava returned an error (' + res.status + ').');
   }
   const data = await res.json();
-  activities = data.filter(a => a.type === 'Run' || a.type === 'TrailRun');
+  activities = data;
   if(activities.length === 0){
-    throw new Error('No recent runs found on that account.');
+    throw new Error('No recent activities found on that account.');
   }
   stravaToken = token;
   const forget = hasSession
     ? '<div class="forget">Staying connected on this browser — <a href="#" id="btn-forget">disconnect</a></div>'
     : '';
-  $('strava-status').innerHTML = '<div class="ok">Connected — pick the run below.</div>' + forget;
+  $('strava-status').innerHTML = '<div class="ok">Connected — pick an activity below.</div>' + forget;
   on('btn-forget', 'click', (e) => {
     e.preventDefault();
     fetch('/api/logout', {method: 'POST'});
@@ -227,11 +257,14 @@ function renderActivityList(){
   activities.forEach((a) => {
     const div = document.createElement('div');
     div.className = 'activity';
-    const dist = (a.distance/MI).toFixed(2);
     const date = parseLocalDate(a.start_date_local).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+    const m = mainMetric(a);
+    const parts = [date, prettyType(a.type)];
+    if(a.distance > 100) parts.push((a.distance/MI).toFixed(2) + ' mi');
+    parts.push(m ? (m.val + m.unit).replace(' /', '/') : fmtDur(a.moving_time || a.elapsed_time));
     div.innerHTML = `<div>
         <div class="act-name">${esc(a.name)}</div>
-        <div class="act-meta">${date} · ${dist} mi · ${fmtPace(a.average_speed)}</div>
+        <div class="act-meta">${parts.join(' · ')}</div>
       </div>`;
     div.addEventListener('click', () => {
       document.querySelectorAll('.activity').forEach(el => el.classList.remove('selected'));
@@ -641,13 +674,14 @@ function buildReport(a){
   const end = new Date(start.getTime() + a.elapsed_time*1000);
   const g = analyzeGlucose(glucoseRows, start, end);
 
+  const noun = sportNoun(a.type);
   if(!g){
-    $('report').innerHTML = '<div class="card"><div class="error">No glucose readings overlap this run\'s time window — check the CSV covers the right day.</div></div>';
+    $('report').innerHTML = '<div class="card"><div class="error">No glucose readings overlap this ' + noun + '\'s time window — check the CSV covers the right day.</div></div>';
     return;
   }
 
   const distMi = a.distance/MI;
-  const pace = fmtPace(a.average_speed);
+  const metric = mainMetric(a);
   const dateStr = start.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
   const deltaSign = g.delta > 0 ? '+' : '';
   const deltaTh = glucoseUnit === 'mmol/L' ? 0.83 : 15;
@@ -667,10 +701,10 @@ function buildReport(a){
   });
 
   const story = generateStory(a, g, start, end);
-  const blurb = generateBlurb(g, distMi, pace, trendWord);
-  const caption = generateCaption(g, distMi, pace, trendWord);
-  const insights = generateInsights(g, splits, start, end);
-  const badges = generateBadges(g, splits, start);
+  const blurb = generateBlurb(a, g, metric, trendWord, noun);
+  const caption = generateCaption(a, g, metric, trendWord);
+  const insights = generateInsights(g, splits, start, end, noun);
+  const badges = generateBadges(g, splits, start, noun);
   const route = routePoints(a);
   const routeTile = route ? `
     <div class="stat">
@@ -685,13 +719,13 @@ function buildReport(a){
     </div>` : '';
 
   const statTiles = [
-    {label:'Distance', val: distMi.toFixed(2), unit:' mi', color:'var(--strava-ink)'},
+    a.distance > 100 ? {label:'Distance', val: distMi.toFixed(2), unit:' mi', color:'var(--strava-ink)'} : null,
     {label:'Time', val: fmtDur(durationSec), unit:'', color:'var(--strava-ink)'},
-    {label:'Avg pace', val: pace.replace('/mi',''), unit:' /mi', color:'var(--strava-ink)'},
+    metric ? {label: metric.label, val: metric.val, unit: metric.unit, color:'var(--strava-ink)'} : null,
     a.total_elevation_gain > 0 ? {label:'Elev gain', val: Math.round(a.total_elevation_gain*3.281), unit:' ft', color:'var(--strava-ink)'} : null,
     a.average_heartrate ? {label:'Avg HR', val: Math.round(a.average_heartrate), unit:' bpm', color:'var(--strava-ink)'} : null,
     {label:'Avg glucose', val: fmtG(g.avg), unit:' '+glucoseUnit, color:'var(--glucose-ink)'},
-    {label:'Range', val: fmtG(g.minRow.val)+'–'+fmtG(g.maxRow.val), unit:' '+glucoseUnit, sub:'low–high during run', color:'var(--glucose-ink)'},
+    {label:'Range', val: fmtG(g.minRow.val)+'–'+fmtG(g.maxRow.val), unit:' '+glucoseUnit, sub:'low–high during the '+noun, color:'var(--glucose-ink)'},
     {label:'In range', val: g.tir, unit:' %', sub:'target '+fmtG(g.lo)+'–'+fmtG(g.hi), color:'var(--glucose-ink)'},
     {label:'Start → finish', val: deltaSign + fmtG(g.delta), unit:' '+glucoseUnit, sub: fmtG(g.startVal)+' → '+fmtG(g.endVal), color:'var(--glucose-ink)'}
   ].filter(Boolean);
@@ -719,7 +753,7 @@ function buildReport(a){
       ${buildGlucoseChart(g, start, end)}
       <div class="chart-key">
         <span><span class="key-line"></span>glucose</span>
-        <span><span class="key-band"></span>run window</span>
+        <span><span class="key-band"></span>${noun} window</span>
         <span><span class="key-target"></span>target ${fmtG(g.lo)}–${fmtG(g.hi)}</span>
       </div>
 
@@ -756,7 +790,7 @@ function buildReport(a){
     </div>
   `;
 
-  lastReport = {a, g, start, end, dateStr, distMi, pace, caption, badges, splits, route};
+  lastReport = {a, g, start, end, dateStr, distMi, metric, noun, caption, badges, splits, route};
   attachChartInteraction(g, start, end);
 
   // the glucose line draws itself in
@@ -827,7 +861,7 @@ function roundedRectPath(ctx, rx, ry, rw, rh, rr){
 }
 
 function renderShareCanvas(){
-  const {a, g, start, end, dateStr, distMi, pace, badges, splits, route} = lastReport;
+  const {a, g, start, end, dateStr, distMi, metric, noun, badges, splits, route} = lastReport;
   const W = 1080, H = 1350, P = 84;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -890,14 +924,14 @@ function renderShareCanvas(){
     y += 6;
   }
 
-  // stats: an orange run row (3 cells) and a teal glucose row (4 cells);
+  // stats: an orange activity row (2–3 cells) and a teal glucose row (4 cells);
   // the glucose unit lives in the chart header, so the teal values stay bare
+  const activityCols = [];
+  if(a.distance > 100) activityCols.push(['DISTANCE', distMi.toFixed(2), ' mi']);
+  if(metric) activityCols.push([metric.label.toUpperCase(), metric.val, metric.unit]);
+  activityCols.push(['TIME', fmtDur(a.moving_time || a.elapsed_time), '']);
   const rowDefs = [
-    {color:'#ff5a2e', valPx: 54, cols: [
-      ['DISTANCE', distMi.toFixed(2), ' mi'],
-      ['AVG PACE', pace.replace('/mi',''), ' /mi'],
-      ['TIME', fmtDur(a.moving_time || a.elapsed_time), '']
-    ]},
+    {color:'#ff5a2e', valPx: 54, cols: activityCols},
     {color:'#45e0c4', valPx: 46, cols: [
       ['AVG GLUCOSE', fmtG(g.avg), ''],
       ['RANGE', fmtG(g.minRow.val) + '–' + fmtG(g.maxRow.val), ''],
@@ -1130,7 +1164,8 @@ function buildTirBar(g){
 
 // ---------- insights & badges ----------
 // Data-driven observations, worded as patterns to notice — not advice.
-function generateInsights(g, splits, start, end){
+function generateInsights(g, splits, start, end, noun){
+  noun = noun || 'run';
   const mmol = glucoseUnit === 'mmol/L';
   const out = [];
   const dur = g.during;
@@ -1184,7 +1219,7 @@ function generateInsights(g, splits, start, end){
     const pd = g.post[g.post.length-1].val - g.post[0].val;
     const pmin = Math.round((g.post[g.post.length-1].t - end)/60000);
     if(pd > (mmol ? 1.7 : 30)){
-      out.push({icon:'🔁', text:`Glucose rebounded <b>+${fmtG(pd)} ${glucoseUnit}</b> in the ${pmin} minutes after stopping — the classic post-run bounce, a pattern worth watching across runs.`});
+      out.push({icon:'🔁', text:`Glucose rebounded <b>+${fmtG(pd)} ${glucoseUnit}</b> in the ${pmin} minutes after stopping — the classic post-${noun} bounce, a pattern worth watching.`});
     }
   }
   if(out.length < 4 && g.pre.length >= 2){
@@ -1196,7 +1231,8 @@ function generateInsights(g, splits, start, end){
   return out.slice(0, 4);
 }
 
-function generateBadges(g, splits, start){
+function generateBadges(g, splits, start, noun){
+  noun = noun || 'run';
   const mmol = glucoseUnit === 'mmol/L';
   const b = [];
   if(g.tir === 100 && g.during.length >= 3) b.push({t:'100% in range', c:'teal'});
@@ -1209,7 +1245,7 @@ function generateBadges(g, splits, start){
     if(MI/avgSp(fullSplits.slice(0, half)) - MI/avgSp(fullSplits.slice(-half)) > 5) b.push({t:'negative split', c:'orange'});
   }
   const h = start.getHours();
-  if(h < 7) b.push({t:'sunrise run', c:'orange'});
+  if(h < 7) b.push({t:'sunrise ' + noun, c:'orange'});
   else if(h >= 21) b.push({t:'night owl', c:'orange'});
   return b.slice(0, 3);
 }
@@ -1229,6 +1265,7 @@ function trendPast(delta){
 }
 
 function generateStory(a, g, start, end){
+  const noun = sportNoun(a.type);
   const blocks = [];
   if(g.pre.length >= 2){
     const preDelta = g.pre[g.pre.length-1].val - g.pre[0].val;
@@ -1241,13 +1278,13 @@ function generateStory(a, g, start, end){
       ? `It dipped below range to <b>${fmtG(g.minRow.val)}</b> around minute ${Math.max(g.minAtMin,0)} — worth a glance at fueling next time.`
       : `The low point was <b>${fmtG(g.minRow.val)}</b> around minute ${Math.max(g.minAtMin,0)}, still inside the target range.`;
     blocks.push({when:'During', text:
-      `Across the run itself glucose ${trendPast(g.delta)}, with <b>${g.tir}%</b> of readings in range. ${lowBit}`});
+      `Across the ${noun} itself glucose ${trendPast(g.delta)}, with <b>${g.tir}%</b> of readings in range. ${lowBit}`});
   }
   if(g.post.length >= 2){
     const postDelta = g.post[g.post.length-1].val - g.post[0].val;
     const postMin = Math.round((g.post[g.post.length-1].t - end)/60000);
     blocks.push({when:'After', text:
-      `In the ${postMin} minutes after the run, glucose was ${trendPhrase(postDelta)}, finishing the window at <b>${fmtG(g.post[g.post.length-1].val)} ${glucoseUnit}</b>.`});
+      `In the ${postMin} minutes after the ${noun}, glucose was ${trendPhrase(postDelta)}, finishing the window at <b>${fmtG(g.post[g.post.length-1].val)} ${glucoseUnit}</b>.`});
   }
   if(a.average_heartrate){
     blocks.push({when:'Effort', text:
@@ -1260,23 +1297,24 @@ function generateStory(a, g, start, end){
     </div>`).join('');
 }
 
-function generateBlurb(g, distMi, pace, trendWord){
+function generateBlurb(a, g, metric, trendWord, noun){
   const swingNote = g.swing < (glucoseUnit==='mmol/L'?1.7:30) ? 'nice and stable the whole way'
     : g.swing < (glucoseUnit==='mmol/L'?3.3:60) ? 'with some natural movement'
     : 'swinging around a fair bit';
   const th = glucoseUnit === 'mmol/L' ? 0.83 : 15;
   const emoji = g.delta > th ? '📈' : g.delta < -th ? '📉' : '➡️';
-  return `${emoji} Over ${distMi.toFixed(1)} miles at ${pace}, glucose averaged ${fmtG(g.avg)} ${glucoseUnit} and ${trendWord} from start to finish, ${swingNote} — ${g.tir}% of the run in range.`;
+  return `${emoji} Over ${metricPhrase(a, metric)}, glucose averaged ${fmtG(g.avg)} ${glucoseUnit} and ${trendWord} from start to finish, ${swingNote} — ${g.tir}% of the ${noun} in range.`;
 }
 
-function generateCaption(g, distMi, pace, trendWord){
+function generateCaption(a, g, metric, trendWord){
+  const mp = metricPhrase(a, metric);
   const templates = [
-    `${distMi.toFixed(1)} miles at ${pace}, ${g.tir}% in range — running on more than just willpower today.`,
-    `Legs at ${pace}, sugar ${trendWord} — a solid team effort out there.`,
-    `${distMi.toFixed(1)} miles down, glucose ${fmtG(g.startVal)} → ${fmtG(g.endVal)} — the numbers behaved today.`,
-    `Pancreas on manual mode, ${distMi.toFixed(1)} miles anyway. ${g.tir}% in range.`,
-    `Fueled, paced, and ${g.tir}% in range — call it a win.`,
-    `${pace} splits with a side of glucose graphs.`
+    `${mp}, ${g.tir}% in range — powered by more than just willpower today.`,
+    `Body at work, sugar ${trendWord} — a solid team effort out there.`,
+    `${mp}, glucose ${fmtG(g.startVal)} → ${fmtG(g.endVal)} — the numbers behaved today.`,
+    `Pancreas on manual mode, ${mp} anyway. ${g.tir}% in range.`,
+    `Fueled, moving, and ${g.tir}% in range — call it a win.`,
+    `${mp} with a side of glucose graphs.`
   ];
   return templates[Math.floor(Math.random()*templates.length)];
 }
