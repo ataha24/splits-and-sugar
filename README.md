@@ -2,7 +2,7 @@
 
 A single-page web app that combines a Strava run with Dexcom glucose data into one shareable report — pace, distance, and a glucose overlay chart showing how blood sugar moved before, during, and after the run.
 
-**Live app:** https://ataha24.github.io/splits-and-sugar/
+**Live app:** _(Vercel URL — set after deploy)_
 
 ## How to use
 
@@ -10,7 +10,7 @@ A single-page web app that combines a Strava run with Dexcom glucose data into o
 2. **Add glucose data** — export a CSV from [clarity.dexcom.com](https://clarity.dexcom.com) covering the day of the run (export icon on any report page; the Clarity phone app can't export CSV, but the website works in a phone browser), then drag the file onto the page or click to choose it.
 3. **Generate the report** — you get a glucose chart with the run window and target range marked, a time-in-range bar, stat tiles (distance, pace, HR, avg glucose, time in range), mile splits with per-mile glucose, earned badges, computed insights ("worth noticing"), a before/during/after story, a copyable caption, and a downloadable share image sized for Strava.
 
-Want to see what a report looks like first? Check the [sample report](https://ataha24.github.io/splits-and-sugar/sample.html) — it's generated live from demo data.
+Want to see what a report looks like first? Check the sample report at `/sample.html` on the live app — it's generated live from demo data.
 
 ## Privacy
 
