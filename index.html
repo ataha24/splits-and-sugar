@@ -25,19 +25,24 @@
 
   <!-- HERO -->
   <section class="hero">
-    <svg class="hero-curve" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true">
-      <g class="hc-bars">
-        <rect x="60"  y="210" width="26" height="90"/><rect x="200" y="190" width="26" height="110"/>
-        <rect x="340" y="222" width="26" height="78"/><rect x="480" y="176" width="26" height="124"/>
-        <rect x="620" y="204" width="26" height="96"/><rect x="760" y="186" width="26" height="114"/>
-        <rect x="900" y="214" width="26" height="86"/><rect x="1040" y="196" width="26" height="104"/>
+    <svg class="hero-curve" viewBox="0 0 1200 200" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="hc-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(69,224,196,.14)"/>
+          <stop offset="100%" stop-color="rgba(69,224,196,0)"/>
+        </linearGradient>
+      </defs>
+      <g class="hc-ticks">
+        <rect x="70" y="188"/><rect x="180" y="188"/><rect x="290" y="188"/><rect x="400" y="188"/>
+        <rect x="510" y="188"/><rect x="620" y="188"/><rect x="730" y="188"/><rect x="840" y="188"/>
+        <rect x="950" y="188"/><rect x="1060" y="188"/>
       </g>
-      <path class="hc-line" d="M0,190 C70,178 110,120 190,128 S300,214 380,204 460,84 540,104 640,226 730,208 830,110 910,130 1060,182 1200,158"/>
-      <circle class="hc-dot" r="6" cx="1200" cy="158"/>
+      <path class="hc-area" d="M0,96 C160,66 300,42 460,58 S740,128 900,112 1090,52 1200,66 L1200,200 L0,200 Z"/>
+      <path class="hc-line" d="M0,96 C160,66 300,42 460,58 S740,128 900,112 1090,52 1200,66"/>
     </svg>
     <p class="eyebrow">Runs &times; blood sugar</p>
     <h1>Turn one run into<br><span class="grad">one story.</span></h1>
-    <p class="sub">Pull a run straight from Strava, drop in a Dexcom Clarity export, and get a single beautiful report showing how your glucose moved before, during, and after the run.</p>
+    <p class="sub">Pull a run straight from Strava, drop in your CGM's export — Dexcom, FreeStyle Libre, and most others — and get a single beautiful report showing how your glucose moved before, during, and after the run.</p>
     <div class="row hero-cta">
       <a class="btn-strava link-cta" href="#card-strava">Get your report</a>
       <a class="btn-ghost link-cta" href="sample.html">See a sample &rarr;</a>
@@ -113,17 +118,28 @@
     </div>
     <div class="step-body">
       <details class="help">
-        <summary>How to export from Dexcom Clarity (~30 sec)</summary>
+        <summary>Dexcom: how to export from Clarity (~30 sec)</summary>
         <ol>
           <li>In a browser, log in at <a href="https://clarity.dexcom.com" target="_blank" rel="noopener">clarity.dexcom.com</a> — the Clarity phone app can't export CSV, but this works fine in a phone browser too.</li>
           <li>On any report page, click the <b>export</b> icon (top of the page) and pick a date range covering the day of the run.</li>
-          <li>Click <b>Export</b> — you get a .csv file.</li>
-          <li>Choose that file below — nothing is uploaded anywhere, it's read in the browser only.</li>
+          <li>Click <b>Export</b> — you get a .csv file. Choose it below.</li>
         </ol>
+      </details>
+      <details class="help">
+        <summary>FreeStyle Libre: how to export from LibreView (~30 sec)</summary>
+        <ol>
+          <li>In a browser, log in at <a href="https://www.libreview.com" target="_blank" rel="noopener">libreview.com</a> with your Libre account.</li>
+          <li>Click <b>Download glucose data</b> (top right of the page) and confirm — you get a .csv file covering your recent readings.</li>
+          <li>Choose that file below.</li>
+        </ol>
+      </details>
+      <details class="help">
+        <summary>Another meter or app?</summary>
+        <p class="help-note">Drop its CSV export in anyway — the reader also understands any spreadsheet with a time column and a glucose column (Medtronic CareLink exports usually work). Whatever the device: the file never leaves your browser; nothing is uploaded.</p>
       </details>
       <label class="file-drop" id="drop-zone">
         <input type="file" id="csv-input" accept=".csv">
-        <span id="drop-label">Drop the Dexcom Clarity CSV export here, or click to choose</span>
+        <span id="drop-label">Drop your CGM's CSV export here, or click to choose</span>
       </label>
       <div id="glucose-status"></div>
     </div>

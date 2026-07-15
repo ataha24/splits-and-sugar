@@ -262,14 +262,10 @@ function handleCsvFile(file){
   const reader = new FileReader();
   reader.onload = (evt) => {
     try{
-      const parsed = parseDexcomCSV(evt.target.result);
-      if(parsed.rows.length === 0){
-        $('glucose-status').innerHTML = '<div class="error">Couldn\'t find glucose readings in that file — is it the Clarity export?</div>';
-        return;
-      }
+      const parsed = parseGlucoseCSV(evt.target.result);
       glucoseRows = parsed.rows;
       glucoseUnit = parsed.unit;
-      $('glucose-status').innerHTML = '<div class="ok">Loaded ' + glucoseRows.length + ' glucose readings (' + glucoseUnit + ').</div>';
+      $('glucose-status').innerHTML = '<div class="ok">Loaded ' + glucoseRows.length + ' glucose readings (' + glucoseUnit + ', ' + parsed.source + ').</div>';
       $('card-glucose').classList.add('done');
       setStep(2,'complete');
       checkReady();
@@ -278,6 +274,144 @@ function handleCsvFile(file){
     }
   };
   reader.readAsText(file);
+}
+
+// Reads any supported CGM export: LibreView (FreeStyle Libre) and Dexcom
+// Clarity are recognized explicitly; anything else falls through to a generic
+// reader that hunts for a timestamp column and a glucose column.
+function parseGlucoseCSV(text){
+  const libre = parseLibreCSV(text);
+  if(libre && libre.rows.length) return libre;
+  let dex = null;
+  try{ dex = parseDexcomCSV(text); }catch(_){}
+  if(dex && dex.rows.length) return dex;
+  const gen = parseGenericCSV(text);
+  if(gen && gen.rows.length) return gen;
+  throw new Error('couldn\'t recognize this as a CGM export — supported: Dexcom Clarity, LibreView (FreeStyle Libre), or any CSV with a timestamp column and a glucose column');
+}
+
+// "10-01-2026 12:04 PM" (LibreView), "10/01/2026 08:15", or ISO. Some exports
+// put day before month — detectDayFirst() settles it from the data itself.
+function parseFlexTimestamp(s, dayFirst){
+  s = String(s || '').trim();
+  const ymd = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})[T ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i);
+  if(ymd){
+    const t = new Date(+ymd[1], +ymd[2] - 1, +ymd[3], +ymd[4], +ymd[5], +(ymd[6] || 0));
+    return isNaN(t.getTime()) ? null : t;
+  }
+  const m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i);
+  if(!m) return null;
+  let h = +m[4];
+  const ap = (m[7] || '').toUpperCase();
+  if(ap === 'PM' && h < 12) h += 12;
+  if(ap === 'AM' && h === 12) h = 0;
+  const day = dayFirst ? +m[1] : +m[2], mon = dayFirst ? +m[2] : +m[1];
+  const t = new Date(+m[3], mon - 1, day, h, +m[5], +(m[6] || 0));
+  return isNaN(t.getTime()) ? null : t;
+}
+
+function detectDayFirst(samples){
+  for(const s of samples){
+    const m = String(s || '').trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.]\d{4}/);
+    if(!m) continue;
+    if(+m[1] > 12) return true;
+    if(+m[2] > 12) return false;
+  }
+  return false; // ambiguous — assume month-first, which matches AM/PM-style exports
+}
+
+// LibreView export: metadata line, then a header row with "Device Timestamp",
+// "Record Type" (0 = automatic reading, 1 = manual scan) and "Historic
+// Glucose" / "Scan Glucose" value columns.
+function parseLibreCSV(text){
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  let headerIdx = -1, headers = [];
+  for(let i = 0; i < Math.min(lines.length, 6); i++){
+    if(lines[i].toLowerCase().includes('historic glucose')){
+      headerIdx = i;
+      headers = splitCsvLine(lines[i]).map(h => h.toLowerCase());
+      break;
+    }
+  }
+  if(headerIdx === -1) return null;
+  const tsCol = headers.findIndex(h => h.includes('timestamp'));
+  const typeCol = headers.findIndex(h => h.includes('record type'));
+  const histCol = headers.findIndex(h => h.includes('historic glucose'));
+  const scanCol = headers.findIndex(h => h.includes('scan glucose'));
+  if(tsCol === -1 || histCol === -1) return null;
+  const unit = headers[histCol].includes('mmol') ? 'mmol/L' : 'mg/dL';
+  const dayFirst = detectDayFirst(lines.slice(headerIdx + 1, headerIdx + 40).map(l => splitCsvLine(l)[tsCol]));
+  const rows = [];
+  for(let i = headerIdx + 1; i < lines.length; i++){
+    const cols = splitCsvLine(lines[i]);
+    if(cols.length <= Math.max(tsCol, histCol)) continue;
+    const type = typeCol !== -1 ? (cols[typeCol] || '').trim() : '0';
+    const rawVal = type === '1' && scanCol !== -1 ? cols[scanCol] : type === '0' ? cols[histCol] : '';
+    const val = parseFloat((rawVal || '').trim());
+    if(isNaN(val)) continue;
+    const t = parseFlexTimestamp(cols[tsCol], dayFirst);
+    if(!t) continue;
+    rows.push({t, val});
+  }
+  rows.sort((a, b) => a.t - b.t);
+  return {rows, unit, source: 'LibreView'};
+}
+
+// Last resort for other meters (Medtronic CareLink etc.): find a header row
+// with a glucose-ish column, then a timestamp column — or separate date and
+// time columns — in the data below it.
+function parseGenericCSV(text){
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  const gRe = /glucose|blood sugar|sensor ?bg|\bsg\b|\bbg\b/i;
+  for(let i = 0; i < Math.min(lines.length, 30); i++){
+    const cells = splitCsvLine(lines[i]);
+    const gCol = cells.findIndex(c => gRe.test(c));
+    if(gCol === -1 || cells.length < 2) continue;
+    const attempt = parseGenericFrom(lines, i, cells.map(h => h.toLowerCase()), gCol);
+    if(attempt && attempt.rows.length) return attempt;
+  }
+  return null;
+}
+
+function parseGenericFrom(lines, headerIdx, headers, gCol){
+  const sample = lines.slice(headerIdx + 1, headerIdx + 40).map(l => splitCsvLine(l));
+  const firstValue = (c) => {
+    for(const row of sample){
+      const v = (row[c] || '').trim();
+      if(v) return v;
+    }
+    return '';
+  };
+  let tsCol = -1, dateCol = -1, timeCol = -1;
+  for(let c = 0; c < headers.length && tsCol === -1; c++){
+    const v = firstValue(c);
+    if(/^\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}[T ]\d{1,2}:\d{2}/.test(v) || /^\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4}[ ,]+\d{1,2}:\d{2}/.test(v)) tsCol = c;
+  }
+  if(tsCol === -1){
+    for(let c = 0; c < headers.length; c++){
+      const v = firstValue(c);
+      if(dateCol === -1 && /^(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{4})$/.test(v)) dateCol = c;
+      else if(timeCol === -1 && /^\d{1,2}:\d{2}(:\d{2})?\s*([AP]M)?$/i.test(v)) timeCol = c;
+    }
+    if(dateCol === -1 || timeCol === -1) return null;
+  }
+  const tsOf = (cols) => tsCol !== -1 ? cols[tsCol] : ((cols[dateCol] || '') + ' ' + (cols[timeCol] || ''));
+  const dayFirst = detectDayFirst(sample.map(tsOf));
+  const rows = [];
+  let maxVal = 0;
+  for(let i = headerIdx + 1; i < lines.length; i++){
+    const cols = splitCsvLine(lines[i]);
+    const val = parseFloat((cols[gCol] || '').trim());
+    if(isNaN(val) || val <= 0) continue;
+    const t = parseFlexTimestamp(tsOf(cols), dayFirst);
+    if(!t) continue;
+    rows.push({t, val});
+    maxVal = Math.max(maxVal, val);
+  }
+  if(rows.length === 0) return null;
+  const unit = headers[gCol].includes('mmol') || maxVal < 35 ? 'mmol/L' : 'mg/dL';
+  rows.sort((a, b) => a.t - b.t);
+  return {rows, unit, source: 'generic CSV'};
 }
 
 function parseDexcomCSV(text){
@@ -335,7 +469,7 @@ function parseDexcomCSV(text){
     rows.push({t, val});
   }
   rows.sort((a,b) => a.t - b.t);
-  return {rows, unit};
+  return {rows, unit, source: 'Dexcom Clarity'};
 }
 
 function splitCsvLine(line){

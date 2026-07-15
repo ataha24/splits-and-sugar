@@ -7,7 +7,7 @@ A single-page web app that combines a Strava run with Dexcom glucose data into o
 ## How to use
 
 1. **Connect Strava** — hit **Connect with Strava**, approve read-only access, and you're straight back on the page with your recent runs loaded — pick one. The browser stays connected on return visits until you hit disconnect. That's the whole setup.
-2. **Add glucose data** — export a CSV from [clarity.dexcom.com](https://clarity.dexcom.com) covering the day of the run (export icon on any report page; the Clarity phone app can't export CSV, but the website works in a phone browser), then drag the file onto the page or click to choose it.
+2. **Add glucose data** — export a CSV from your CGM's website and drag it onto the page: [clarity.dexcom.com](https://clarity.dexcom.com) for Dexcom (export icon on any report page), [libreview.com](https://www.libreview.com) for FreeStyle Libre ("Download glucose data"), and most other meters' CSVs work too — the reader accepts any file with a time column and a glucose column.
 3. **Generate the report** — you get a glucose chart with the run window and target range marked, a time-in-range bar, stat tiles (distance, pace, HR, avg glucose, time in range), mile splits with per-mile glucose, earned badges, computed insights ("worth noticing"), a before/during/after story, a copyable caption, and a downloadable share image sized for Strava.
 
 Want to see what a report looks like first? Check the sample report at `/sample.html` on the live app — it's generated live from demo data.
