@@ -88,7 +88,16 @@ async function loadActivities(token){
 // app's client secret lives. The page only ever holds the short-lived access
 // token in memory — the long-lived refresh token stays in an httpOnly cookie
 // that page JavaScript can never read.
-let hasSession = false; // connected via the cookie session (vs a pasted token)
+let hasSession = false; // connected via the cookie session (vs a pasted token / DIY app)
+
+function authorizeUrl(clientId){
+  return 'https://www.strava.com/oauth/authorize'
+    + '?client_id=' + encodeURIComponent(clientId)
+    + '&redirect_uri=' + encodeURIComponent(location.origin + location.pathname)
+    + '&response_type=code'
+    + '&scope=' + encodeURIComponent('read,activity:read_all')
+    + '&approval_prompt=auto';
+}
 
 on('btn-oauth', 'click', async () => {
   const statusEl = $('strava-status');
@@ -97,21 +106,41 @@ on('btn-oauth', 'click', async () => {
     const res = await fetch('/api/config');
     const cfg = await res.json().catch(() => ({}));
     if(!res.ok) throw new Error(cfg.error || 'The server isn\'t reachable — try again in a moment.');
-    location.href = 'https://www.strava.com/oauth/authorize'
-      + '?client_id=' + encodeURIComponent(cfg.client_id)
-      + '&redirect_uri=' + encodeURIComponent(location.origin + location.pathname)
-      + '&response_type=code'
-      + '&scope=' + encodeURIComponent('read,activity:read_all')
-      + '&approval_prompt=auto';
+    location.href = authorizeUrl(cfg.client_id);
   }catch(err){
     statusEl.innerHTML = '<div class="error">' + esc(err.message) + '</div>';
   }
 });
 
+// DIY option: users who'd rather not route through the shared app can use
+// their own personal Strava API app. The code-for-token exchange then happens
+// entirely in the browser (Strava's token endpoint allows CORS) and nothing
+// outlives the visit — credentials survive only the OAuth redirect, in
+// sessionStorage, and are wiped the moment the page returns.
+const DIY_ID_KEY = 'ss_diy_id', DIY_SECRET_KEY = 'ss_diy_secret';
+
+on('btn-diy', 'click', () => {
+  const id = $('client-id').value.trim();
+  const secret = $('client-secret').value.trim();
+  if(!id || !secret){
+    $('strava-status').innerHTML = '<div class="error">Enter both the Client ID and Client Secret first (see the steps above).</div>';
+    return;
+  }
+  sessionStorage.setItem(DIY_ID_KEY, id);
+  sessionStorage.setItem(DIY_SECRET_KEY, secret);
+  location.href = authorizeUrl(id);
+});
+
 async function handleOAuthReturn(){
   const params = new URLSearchParams(location.search);
   const statusEl = $('strava-status');
+  const diyId = sessionStorage.getItem(DIY_ID_KEY);
+  const diySecret = sessionStorage.getItem(DIY_SECRET_KEY);
+  sessionStorage.removeItem(DIY_ID_KEY);
+  sessionStorage.removeItem(DIY_SECRET_KEY);
   history.replaceState(null, '', location.pathname); // scrub the code from the URL
+  if(diyId) $('client-id').value = diyId;
+  if(diySecret) $('client-secret').value = diySecret;
 
   if(params.get('error')){
     statusEl.innerHTML = '<div class="error">Strava access was declined — hit connect again and tap Authorize.</div>';
@@ -123,19 +152,34 @@ async function handleOAuthReturn(){
   }
   statusEl.innerHTML = '<div class="ok">Authorized — finishing sign-in…</div>';
   try{
-    const res = await fetch('/api/token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({code: params.get('code')})
-    });
-    const tok = await res.json().catch(() => ({}));
-    if(!res.ok) throw new Error(tok.error || 'Sign-in failed — try connecting again.');
-    hasSession = true;
-    await loadActivities(tok.access_token);
+    if(diyId && diySecret){
+      // DIY app: exchange in the browser, straight against Strava
+      const res = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({client_id: diyId, client_secret: diySecret, code: params.get('code'), grant_type: 'authorization_code'})
+      });
+      if(!res.ok) throw new Error('Strava rejected the sign-in (' + res.status + ') — double-check the Client Secret and connect again.');
+      const tok = await res.json();
+      await loadActivities(tok.access_token);
+    }else{
+      const res = await fetch('/api/token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: params.get('code')})
+      });
+      const tok = await res.json().catch(() => ({}));
+      if(!res.ok) throw new Error(tok.error || 'Sign-in failed — try connecting again.');
+      hasSession = true;
+      await loadActivities(tok.access_token);
+    }
   }catch(err){
     statusEl.innerHTML = '<div class="error">' + esc(err.message) + '</div>';
   }
 }
+
+// show this site's domain in the DIY setup instructions
+if($('cb-domain')) $('cb-domain').textContent = location.hostname || 'localhost';
 
 // Return visit: if the httpOnly cookie holds a connection, swap it for a
 // fresh access token silently — no redirect, no typing.

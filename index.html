@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Splits &amp; Sugar</title>
-<meta name="description" content="Combine a Strava run with Dexcom glucose data into one beautiful, shareable report.">
+<title>Splits &amp; Sugar — one run, one story</title>
+<meta name="description" content="Combine a Strava run with Dexcom glucose data into one beautiful, shareable report. No account, nothing uploaded.">
 <meta property="og:title" content="Splits &amp; Sugar">
 <meta property="og:description" content="One run, one story — pace and glucose on a single page.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏃</text></svg>">
@@ -13,29 +13,92 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+
+<header class="topbar">
+  <span class="wordmark">SPLITS<em>&amp;</em>SUGAR</span>
+  <a class="topbar-link" href="sample.html">See a sample &rarr;</a>
+</header>
+
 <div class="wrap">
 
-  <p class="eyebrow">Splits &amp; Sugar</p>
-  <h1>Turn one run into<br><span class="grad">one story.</span></h1>
-  <p class="sub">Pull a run straight from Strava, drop in a Dexcom Clarity export, and get a single beautiful report showing how your glucose moved before, during, and after the run.</p>
+  <!-- HERO -->
+  <section class="hero">
+    <svg class="hero-curve" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true">
+      <g class="hc-bars">
+        <rect x="60"  y="210" width="26" height="90"/><rect x="200" y="190" width="26" height="110"/>
+        <rect x="340" y="222" width="26" height="78"/><rect x="480" y="176" width="26" height="124"/>
+        <rect x="620" y="204" width="26" height="96"/><rect x="760" y="186" width="26" height="114"/>
+        <rect x="900" y="214" width="26" height="86"/><rect x="1040" y="196" width="26" height="104"/>
+      </g>
+      <path class="hc-line" d="M0,190 C70,178 110,120 190,128 S300,214 380,204 460,84 540,104 640,226 730,208 830,110 910,130 1060,182 1200,158"/>
+      <circle class="hc-dot" r="6" cx="1200" cy="158"/>
+    </svg>
+    <p class="eyebrow">Runs &times; blood sugar</p>
+    <h1>Turn one run into<br><span class="grad">one story.</span></h1>
+    <p class="sub">Pull a run straight from Strava, drop in a Dexcom Clarity export, and get a single beautiful report showing how your glucose moved before, during, and after the run.</p>
+    <div class="row hero-cta">
+      <a class="btn-strava link-cta" href="#card-strava">Get your report</a>
+      <a class="btn-ghost link-cta" href="sample.html">See a sample &rarr;</a>
+    </div>
+    <ul class="trust">
+      <li>No account</li>
+      <li>Nothing uploaded</li>
+      <li>Read-only Strava access</li>
+    </ul>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" aria-label="What you get">
+    <div class="feature">
+      <svg viewBox="0 0 40 24" aria-hidden="true"><path d="M2,16 C8,15 10,7 15,8 S22,19 27,17 33,6 38,8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <h3>Pace meets glucose</h3>
+      <p>One chart, one timeline — your run window and target range marked on the curve.</p>
+    </div>
+    <div class="feature">
+      <svg viewBox="0 0 40 24" aria-hidden="true"><rect x="2" y="14" width="9" height="8" rx="1.5" fill="currentColor" opacity=".45"/><rect x="15" y="8" width="9" height="14" rx="1.5" fill="currentColor"/><rect x="28" y="11" width="9" height="11" rx="1.5" fill="currentColor" opacity=".7"/></svg>
+      <h3>Sugar per split</h3>
+      <p>Every mile gets its pace <i>and</i> its average glucose — see the fade before you feel it.</p>
+    </div>
+    <div class="feature">
+      <svg viewBox="0 0 40 24" aria-hidden="true"><rect x="8" y="2" width="24" height="20" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13,16 l5,-5 4,3 5,-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h3>Made to share</h3>
+      <p>Badges, insights, a caption, and a poster-grade share image sized for Strava.</p>
+    </div>
+  </section>
 
   <!-- STEP 1 -->
-  <div class="card" id="card-strava">
+  <div class="card step-card" id="card-strava">
     <div class="step-head">
       <div class="step-num active" id="num-1">1</div>
       <div class="step-title">Connect Strava</div>
     </div>
     <div class="step-body">
-      <p class="connect-note">One click: approve read-only access on Strava and you're straight back here. This browser stays connected until you disconnect.</p>
+      <p class="connect-note">One tap — approve read-only access on Strava and you're straight back here with your recent runs. This browser stays connected until you disconnect.</p>
       <div class="row">
         <button class="btn-strava" id="btn-oauth">Connect with Strava</button>
       </div>
-      <details class="help" style="margin-top:12px;">
-        <summary>Already have an access token with activity:read scope?</summary>
-        <input type="password" id="strava-token" placeholder="Paste access token" autocomplete="off">
+      <details class="help" style="margin-top:14px;">
+        <summary>Prefer not to route through our server? Use your own Strava app (~2 min)</summary>
+        <p class="help-note">Totally optional — the button above is all most people need. But if you'd rather keep the sign-in 100% between your browser and Strava (or the shared connection is at capacity), Strava lets anyone create a free personal "API app". With it, nothing ever touches our server and nothing outlives this visit.</p>
+        <ol>
+          <li>Go to <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> (logged in as the runner) and create an app — any name and website work.</li>
+          <li>Set <b>Authorization Callback Domain</b> to <code id="cb-domain">this site's domain</code>.</li>
+          <li>Copy the <b>Client ID</b> and <b>Client Secret</b> into the boxes below and connect.</li>
+        </ol>
+        <input type="text" id="client-id" placeholder="Client ID" autocomplete="off" inputmode="numeric">
+        <input type="password" id="client-secret" placeholder="Client Secret" autocomplete="off">
         <div class="row" style="margin-top:8px;">
-          <button class="btn-ghost" id="btn-connect-strava">Use this token</button>
+          <button class="btn-ghost" id="btn-diy">Connect with my own app</button>
         </div>
+        <details class="help" style="margin-top:12px;">
+          <summary>Already have an access token with activity:read scope?</summary>
+          <input type="password" id="strava-token" placeholder="Paste access token" autocomplete="off">
+          <div class="row" style="margin-top:8px;">
+            <button class="btn-ghost" id="btn-connect-strava">Use this token</button>
+          </div>
+        </details>
       </details>
       <div id="strava-status"></div>
       <div class="activity-list" id="activity-list"></div>
@@ -43,7 +106,7 @@
   </div>
 
   <!-- STEP 2 -->
-  <div class="card" id="card-glucose">
+  <div class="card step-card" id="card-glucose">
     <div class="step-head">
       <div class="step-num" id="num-2">2</div>
       <div class="step-title">Add your glucose data</div>
@@ -67,7 +130,7 @@
   </div>
 
   <!-- STEP 3 -->
-  <div class="card" id="card-generate">
+  <div class="card step-card" id="card-generate">
     <div class="step-head">
       <div class="step-num" id="num-3">3</div>
       <div class="step-title">Generate the report</div>
