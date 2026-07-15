@@ -153,8 +153,7 @@
   .file-drop input{display:none;}
   .error{color:var(--warn);font-size:13px;margin-top:8px;}
   .ok{color:var(--glucose);font-size:13px;margin-top:8px;}
-  label.remember{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:10px;cursor:pointer;}
-  label.remember input{accent-color:var(--glucose);}
+  .connect-note{color:var(--text-dim);font-size:13.5px;line-height:1.6;margin:4px 0 12px;}
   .forget{color:var(--text-dim);font-size:12px;margin-top:4px;}
   .forget a{color:var(--text-dim);}
 

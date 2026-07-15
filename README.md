@@ -6,7 +6,7 @@ A single-page web app that combines a Strava run with Dexcom glucose data into o
 
 ## How to use
 
-1. **Connect Strava** — create a personal API app at [strava.com/settings/api](https://www.strava.com/settings/api) (one-time, ~2 min), set its **Authorization Callback Domain** to `ataha24.github.io`, then enter the app's Client ID and Client Secret on the page and hit **Connect with Strava**. Strava asks you to approve read-only access and sends you straight back; the page then loads your recent runs — pick one. With **Stay connected on this device** ticked (the default), return visits reconnect automatically — no re-entering anything. (Note: the "Your Access Token" shown on the settings page won't work directly — it lacks the scope to read activities — which is why the page does the proper authorization dance for you.)
+1. **Connect Strava** — hit **Connect with Strava**, approve read-only access, and you're straight back on the page with your recent runs loaded — pick one. The browser stays connected on return visits until you hit disconnect. That's the whole setup.
 2. **Add glucose data** — export a CSV from [clarity.dexcom.com](https://clarity.dexcom.com) covering the day of the run (export icon on any report page; the Clarity phone app can't export CSV, but the website works in a phone browser), then drag the file onto the page or click to choose it.
 3. **Generate the report** — you get a glucose chart with the run window and target range marked, a time-in-range bar, stat tiles (distance, pace, HR, avg glucose, time in range), mile splits with per-mile glucose, earned badges, computed insights ("worth noticing"), a before/during/after story, a copyable caption, and a downloadable share image sized for Strava.
 
@@ -14,15 +14,21 @@ Want to see what a report looks like first? Check the [sample report](https://at
 
 ## Privacy
 
-- The app is fully static — there is no backend and no server-side storage. The OAuth token exchange happens in your browser, directly against Strava.
-- With **Stay connected on this device** ticked, your Client ID/Secret and Strava refresh token are kept in your browser's localStorage (on your device only) so return visits reconnect automatically; the **disconnect** link removes them. Untick the box and nothing outlives the visit: the token stays in memory, and the Client ID/Secret survive only the OAuth redirect in sessionStorage before being wiped. Either way, credentials are never sent anywhere except directly to Strava's API.
+- No account data is ever stored server-side. The tiny API layer (`/api`) only relays the OAuth token exchange to Strava — it holds the app's client secret in an environment variable and keeps nothing else.
+- The page itself only ever sees the short-lived Strava access token, held in memory for the session. The long-lived refresh token lives in an httpOnly cookie, which page JavaScript cannot read — so there are no credentials in localStorage or anywhere a script could leak them. The **disconnect** link clears the cookie.
 - The glucose CSV is parsed locally in the browser and never uploaded.
 
 ## Development
 
-No build step. Open `index.html` in a browser, or serve it locally:
+No build step. The static page can be served with `python3 -m http.server`, but the Strava connect flow needs the `/api` functions, so use:
 
 ```sh
-python3 -m http.server
+vercel dev
 ```
+
+## Running your own copy (owner setup, one-time)
+
+1. Create a Strava API app at [strava.com/settings/api](https://www.strava.com/settings/api); set **Authorization Callback Domain** to your deployment's domain (e.g. `your-app.vercel.app`).
+2. Deploy this repo to Vercel with two environment variables: `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.
+3. New Strava apps start in "single player mode" (only your own account can connect). Upgrade the athlete capacity from the [API settings dashboard](https://www.strava.com/settings/api) — up to 10 athletes is self-serve; beyond that requires submitting the app to Strava for review.
 
