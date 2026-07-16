@@ -51,6 +51,7 @@
       <li>No account</li>
       <li>Nothing uploaded</li>
       <li>Read-only Strava access</li>
+      <li id="conn-count" hidden></li>
     </ul>
   </section>
 
@@ -117,43 +118,48 @@
       <div class="step-title">Add your glucose data</div>
     </div>
     <div class="step-body">
-      <details class="help">
-        <summary>Dexcom: how to export from Clarity (~30 sec)</summary>
-        <ol>
-          <li>In a browser, log in at <a href="https://clarity.dexcom.com" target="_blank" rel="noopener">clarity.dexcom.com</a> — the Clarity phone app can't export CSV, but this works fine in a phone browser too.</li>
-          <li>On any report page, click the <b>export</b> icon (top of the page) and pick a date range covering the day of the activity.</li>
-          <li>Click <b>Export</b> — you get a .csv file. Choose it below.</li>
-        </ol>
-      </details>
-      <details class="help">
-        <summary>FreeStyle Libre: how to export from LibreView (~30 sec)</summary>
-        <ol>
-          <li>In a browser, log in at <a href="https://www.libreview.com" target="_blank" rel="noopener">libreview.com</a> with your Libre account.</li>
-          <li>Click <b>Download glucose data</b> (top right of the page) and confirm — you get a .csv file covering your recent readings.</li>
-          <li>Choose that file below.</li>
-        </ol>
-      </details>
-      <details class="help">
-        <summary>Another meter or app?</summary>
-        <p class="help-note">Drop its CSV export in anyway — the reader also understands any spreadsheet with a time column and a glucose column (Medtronic CareLink exports usually work). Whatever the device: the file never leaves your browser; nothing is uploaded.</p>
-      </details>
-      <details class="help">
-        <summary>No export? Fill in the template by hand</summary>
-        <p class="help-note">Download the template, open it in Excel, Numbers, or Google Sheets, and add one row per reading — a time and a glucose value. Every 5–15 minutes is plenty; try to cover from ~45 minutes before the activity to ~45 minutes after. Save as .csv and drop it above — or skip the file entirely: copy your rows and <b>paste them anywhere on this page</b> (works straight from any spreadsheet).</p>
-        <pre class="template-preview">Timestamp,Glucose Value (mg/dL)
-2026-07-15 07:45,98
-2026-07-15 08:00,104
-2026-07-15 08:15,121</pre>
-        <div class="row" style="margin-top:10px;">
-          <a class="btn-ghost link-cta" download="glucose-template.csv" href="data:text/csv;charset=utf-8,Timestamp%2CGlucose%20Value%20(mg%2FdL)%0A2026-07-15%2007%3A45%2C98%0A2026-07-15%2008%3A00%2C104%0A2026-07-15%2008%3A15%2C121%0A2026-07-15%2008%3A30%2C116%0A">Download template (.csv)</a>
-        </div>
-        <p class="help-note">Using mmol/L? Write the header as <code>Glucose Value (mmol/L)</code> and enter values like 5.8 — the reader figures it out.</p>
-      </details>
       <label class="file-drop" id="drop-zone">
         <input type="file" id="csv-input" accept=".csv">
         <span id="drop-label">Drop your CGM's CSV export here, click to choose — or paste rows from a spreadsheet</span>
       </label>
       <div id="glucose-status"></div>
+      <div class="src-help">
+        <span class="src-label">How do I get my data?</span>
+        <div class="src-tabs">
+          <button type="button" class="src-tab" data-panel="src-dexcom">Dexcom</button>
+          <button type="button" class="src-tab" data-panel="src-libre">Libre</button>
+          <button type="button" class="src-tab" data-panel="src-other">Other meter</button>
+          <button type="button" class="src-tab" data-panel="src-manual">By hand</button>
+        </div>
+        <div class="src-panel" id="src-dexcom" hidden>
+          <ol>
+            <li>In a browser, log in at <a href="https://clarity.dexcom.com" target="_blank" rel="noopener">clarity.dexcom.com</a> — the Clarity phone app can't export CSV, but this works fine in a phone browser too.</li>
+            <li>On any report page, click the <b>export</b> icon (top of the page) and pick a date range covering the day of the activity.</li>
+            <li>Click <b>Export</b> — you get a .csv file. Drop it above. Takes ~30 seconds.</li>
+          </ol>
+        </div>
+        <div class="src-panel" id="src-libre" hidden>
+          <ol>
+            <li>In a browser, log in at <a href="https://www.libreview.com" target="_blank" rel="noopener">libreview.com</a> with your Libre account.</li>
+            <li>Click <b>Download glucose data</b> (top right of the page) and confirm — you get a .csv file covering your recent readings.</li>
+            <li>Drop that file above. Takes ~30 seconds.</li>
+          </ol>
+        </div>
+        <div class="src-panel" id="src-other" hidden>
+          <p class="help-note">Drop its CSV export in anyway — the reader understands any spreadsheet with a time column and a glucose column (Medtronic CareLink exports usually work). Whatever the device: the file never leaves your browser; nothing is uploaded.</p>
+        </div>
+        <div class="src-panel" id="src-manual" hidden>
+          <p class="help-note">Download the template, open it in Excel, Numbers, or Google Sheets, and add one row per reading — a time and a glucose value. Every 5–15 minutes is plenty; cover from ~45 minutes before the activity to ~45 minutes after. Save as .csv and drop it above — or skip the file entirely: copy your rows and <b>paste them anywhere on this page</b>.</p>
+          <pre class="template-preview">Timestamp,Glucose Value (mg/dL)
+2026-07-15 07:45,98
+2026-07-15 08:00,104
+2026-07-15 08:15,121</pre>
+          <div class="row" style="margin-top:10px;">
+            <a class="btn-ghost link-cta" download="glucose-template.csv" href="data:text/csv;charset=utf-8,Timestamp%2CGlucose%20Value%20(mg%2FdL)%0A2026-07-15%2007%3A45%2C98%0A2026-07-15%2008%3A00%2C104%0A2026-07-15%2008%3A15%2C121%0A2026-07-15%2008%3A30%2C116%0A">Download template (.csv)</a>
+          </div>
+          <p class="help-note">Using mmol/L? Write the header as <code>Glucose Value (mmol/L)</code> and enter values like 5.8 — the reader figures it out.</p>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -41,6 +41,34 @@ export async function stravaToken(params){
   return {ok: res.ok, status: res.status, body};
 }
 
+// A single anonymous total-connections counter in Upstash Redis — the only
+// thing the app ever stores, and it contains nothing about any user.
+function kvConfig(){
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? {url, token} : null;
+}
+
+export async function bumpCounter(){
+  const kv = kvConfig();
+  if(!kv) return;
+  try{
+    await fetch(kv.url + '/incr/ss_connections', {headers: {Authorization: 'Bearer ' + kv.token}});
+  }catch(_){ /* counting must never break sign-in */ }
+}
+
+export async function readCounter(){
+  const kv = kvConfig();
+  if(!kv) return null;
+  try{
+    const res = await fetch(kv.url + '/get/ss_connections', {headers: {Authorization: 'Bearer ' + kv.token}});
+    const data = await res.json();
+    return data.result === null ? 0 : parseInt(data.result, 10);
+  }catch(_){
+    return null;
+  }
+}
+
 export function json(data, status = 200, extraHeaders = {}){
   return new Response(JSON.stringify(data), {
     status,

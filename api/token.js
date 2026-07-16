@@ -1,4 +1,4 @@
-import { credentials, cookieHeader, stravaToken, json } from './_strava.js';
+import { credentials, cookieHeader, stravaToken, json, bumpCounter } from './_strava.js';
 
 // Exchange the OAuth authorization code for tokens. The access token goes
 // back to the page (memory only); the refresh token is set as an httpOnly
@@ -19,6 +19,7 @@ export async function POST(request){
   if(!tok.ok || !tok.body.access_token){
     return json({error: 'Strava rejected the sign-in (' + tok.status + ') — try connecting again.'}, 502);
   }
+  await bumpCounter();
   return json(
     {access_token: tok.body.access_token, expires_at: tok.body.expires_at},
     200,

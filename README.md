@@ -14,7 +14,7 @@ Want to see what a report looks like first? Check the sample report at `/sample.
 
 ## Privacy
 
-- No account data is ever stored server-side. The tiny API layer (`/api`) only relays the OAuth token exchange to Strava — it holds the app's client secret in an environment variable and keeps nothing else.
+- No account data is ever stored server-side. The tiny API layer (`/api`) only relays the OAuth token exchange to Strava — it holds the app's client secret in an environment variable and keeps nothing else. The single exception is one anonymous number: a total count of connections made, with nothing about who made them.
 - The page itself only ever sees the short-lived Strava access token, held in memory for the session. The long-lived refresh token lives in an httpOnly cookie, which page JavaScript cannot read — so there are no credentials in localStorage or anywhere a script could leak them. The **disconnect** link clears the cookie.
 - The glucose CSV is parsed locally in the browser and never uploaded.
 

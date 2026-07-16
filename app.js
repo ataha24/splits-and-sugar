@@ -290,6 +290,35 @@ if(dropZone){
     if(file) handleCsvFile(file);
   });
 }
+// "How do I get my data?" source pills — one panel open at a time, click
+// again to close.
+document.querySelectorAll('.src-tab').forEach(btn => btn.addEventListener('click', () => {
+  const panel = $(btn.dataset.panel);
+  const wasOpen = !panel.hidden;
+  document.querySelectorAll('.src-panel').forEach(p => { p.hidden = true; });
+  document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
+  if(!wasOpen){
+    panel.hidden = false;
+    btn.classList.add('active');
+  }
+}));
+
+// anonymous total-connections counter in the hero (quietly absent if the
+// stats endpoint isn't configured)
+(async function showConnCount(){
+  const el = $('conn-count');
+  if(!el) return;
+  try{
+    const res = await fetch('/api/stats');
+    if(!res.ok) return;
+    const s = await res.json();
+    if(s.connections > 0){
+      el.textContent = s.connections + ' connection' + (s.connections === 1 ? '' : 's') + ' and counting';
+      el.hidden = false;
+    }
+  }catch(_){ /* leave it hidden */ }
+})();
+
 // Paste support: rows copied from any spreadsheet (or a CSV opened in a text
 // editor) can be pasted anywhere on the page. Unparseable pastes are ignored
 // so ordinary copy-paste elsewhere on the page never nags.
